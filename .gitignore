@@ -1,0 +1,10 @@
+# Local editor / OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local test and temporary files
+.coverage
+.shellcheck-cache
