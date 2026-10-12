@@ -2,31 +2,41 @@
 
 set -e
 
-echo "[SYSTEM] Checking operating system..."
+
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+source "$BASE_DIR/scripts/logger.sh"
+
+
+log_info "Checking operating system..."
+
 
 if [ -f /etc/os-release ]; then
-    . /etc/os-release
+    source /etc/os-release
 else
-    echo "Unsupported system"
+    log_error "Cannot detect operating system"
     exit 1
 fi
 
 
 case "$ID" in
+
     debian|ubuntu)
-        echo "[OK] Supported OS: $PRETTY_NAME"
+        log_ok "Supported OS: $PRETTY_NAME"
         ;;
+
     *)
-        echo "[ERROR] Unsupported OS: $PRETTY_NAME"
+        log_error "Unsupported OS: $PRETTY_NAME"
         exit 1
         ;;
+
 esac
 
 
 if [ "$EUID" -ne 0 ]; then
-    echo "[ERROR] Run as root"
+    log_error "Run installer as root"
     exit 1
 fi
 
 
-echo "[OK] Root access confirmed"
+log_ok "Root access confirmed"
