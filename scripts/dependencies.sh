@@ -1,28 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BASE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$BASE_DIR/scripts/lib.sh"
+require_root
+export DEBIAN_FRONTEND=noninteractive
 
-set -e
-
-
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-source "$BASE_DIR/scripts/logger.sh"
-
-
-log_info "Updating package list..."
-
-apt update -y
-
-
+log_info "Refreshing apt package indexes..."
+apt-get update
 log_info "Installing required packages..."
-
-
-apt install -y \
-curl \
-wget \
-jq \
-unzip \
-openssl \
-qrencode
-
-
-log_ok "Dependencies installed"
+apt-get install -y --no-install-recommends ca-certificates curl openssl tar gzip ufw iproute2 procps
+log_ok "Required packages installed"

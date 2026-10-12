@@ -1,42 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BASE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$BASE_DIR/scripts/lib.sh"
 
-set -e
+require_root
+[[ -r /etc/os-release ]] || die "Cannot identify this operating system (/etc/os-release missing)."
+# shellcheck disable=SC1091
+source /etc/os-release
 
-
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-source "$BASE_DIR/scripts/logger.sh"
-
-
-log_info "Checking operating system..."
-
-
-if [ -f /etc/os-release ]; then
-    source /etc/os-release
-else
-    log_error "Cannot detect operating system"
-    exit 1
-fi
-
-
-case "$ID" in
-
-    debian|ubuntu)
-        log_ok "Supported OS: $PRETTY_NAME"
+case "${ID:-}" in
+    debian)
+        case "${VERSION_ID:-}" in
+            12|13) ;;
+            *) die "Supported Debian versions: 12 and 13. Detected: ${PRETTY_NAME:-unknown}." ;;
+        esac
         ;;
-
-    *)
-        log_error "Unsupported OS: $PRETTY_NAME"
-        exit 1
+    ubuntu)
+        case "${VERSION_ID:-}" in
+            22.04|24.04|26.04) ;;
+            *) die "Supported Ubuntu versions: 22.04, 24.04 and 26.04. Detected: ${PRETTY_NAME:-unknown}." ;;
+        esac
         ;;
-
+    *) die "This first release supports Debian 12/13 and Ubuntu 22.04/24.04/26.04 only. Detected: ${PRETTY_NAME:-unknown}." ;;
 esac
 
+command -v systemctl >/dev/null 2>&1 || die "systemd/systemctl is required."
+systemctl is-system-running >/dev/null 2>&1 || {
+    state="$(systemctl is-system-running 2>/dev/null || true)"
+    [[ "$state" == "degraded" ]] || die "systemd is not fully available (state: ${state:-unknown})."
+}
+command -v apt-get >/dev/null 2>&1 || die "apt-get is required."
 
-if [ "$EUID" -ne 0 ]; then
-    log_error "Run installer as root"
-    exit 1
-fi
-
-
-log_ok "Root access confirmed"
+log_ok "Supported operating system: ${PRETTY_NAME:-$ID}"
+log_ok "systemd and apt-get detected"

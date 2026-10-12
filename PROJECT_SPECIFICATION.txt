@@ -1,0 +1,101 @@
+MVN DEPLOY — PROJECT SPECIFICATION
+One-command VPN Server Deployment
+Version: 0.2.0
+
+PURPOSE
+=======
+MVN Deploy is a small Bash-based deployment orchestrator for a clean VPS. Its
+job is to perform predictable first-boot system setup and invoke the official
+3x-ui installer. 3x-ui manages the bundled Xray-core.
+
+THE PRODUCT BOUNDARY
+====================
+MVN Deploy:
+- verifies supported operating system and execution privileges;
+- installs minimal system dependencies;
+- configures TCP BBR when the running kernel exposes it;
+- prepares UFW rules without resetting existing rules;
+- invokes the official 3x-ui installer in unattended mode;
+- requests IP-based TLS mode by default;
+- reads the official root-only install-result.env to detect the panel port;
+- verifies x-ui.service and prints the result.
+
+3x-ui owns Xray-core, inbounds, clients, subscriptions, panel authentication,
+statistics, certificate settings, and the official update process.
+
+MVN Deploy must not install a duplicate Xray binary, write an independent
+Xray config.json, make its own xray.service, create VPN clients, emit QR codes,
+or manage VLESS links.
+
+INSTALLATION SEQUENCE
+====================
+1. bootstrap.sh downloads the main branch archive over HTTPS to a temporary
+   directory and invokes install.sh. Temporary files are removed afterward.
+2. install.sh parses options, requires root, and invokes system checks.
+3. dependencies.sh updates apt indexes and installs required packages.
+4. firewall.sh prepare allows the detected SSH port and TCP/80, TCP/443,
+   UDP/443 on an already-active UFW. It does not enable an inactive firewall.
+5. bbr.sh checks the running kernel; if BBR is available it writes a dedicated
+   sysctl drop-in and applies fq + BBR. If unsupported, it warns and continues.
+6. xui.sh downloads the official MHSanaei/3x-ui installation script using TLS,
+   checks Bash syntax, and runs it with XUI_NONINTERACTIVE=1 and XUI_SSL_MODE=ip
+   (unless overridden by MVN_XUI_SSL_MODE).
+7. firewall.sh apply reads XUI_PANEL_PORT from /etc/x-ui/install-result.env.
+   It adds the panel TCP rule. For a new UFW, it allows known ports first,
+   changes default incoming to deny/outgoing to allow, then enables UFW only
+   after the panel port is known. It never runs ufw reset.
+8. verify.sh checks x-ui.service, enablement, and the root-only result file.
+9. summary.sh prints panel URL, port, username, password, and management tips.
+
+SUPPORTED HOSTS
+===============
+First release: Debian 12/13 and Ubuntu 22.04/24.04/26.04 with systemd and apt.
+Other operating systems are intentionally rejected until separately tested.
+
+FIREWALL POLICY
+===============
+Baseline ports:
+- SSH: the current SSH_CONNECTION server port, or ports reported by sshd -T;
+  fall back to TCP/22 only when no better signal exists.
+- TCP/80: HTTP/ACME.
+- TCP/443 and UDP/443: common HTTPS/VPN ports.
+- TCP/<panel-port>: detected from upstream install-result.env.
+
+Never reset or flush firewall rules. Existing active UFW default policies are
+not modified. When activating an inactive UFW, the user is warned that default
+incoming traffic becomes deny. Any extra ports used for new inbounds must be
+opened manually in both UFW and the provider-level firewall/security group.
+The project must never assume it can modify a provider firewall.
+
+BBR POLICY
+==========
+Use /etc/sysctl.d/99-mvn-deploy-bbr.conf with:
+  net.core.default_qdisc = fq
+  net.ipv4.tcp_congestion_control = bbr
+
+Only apply if the running kernel reports BBR in its available congestion-control
+list. Lack of BBR is a warning, not a fatal error. Do not claim BBR guarantees
+specific bandwidth/latency.
+
+SECURITY AND SECRETS
+====================
+The upstream installer is an external code dependency. It is downloaded over
+HTTPS, checked with bash -n, then executed. bash -n is syntax validation, not a
+cryptographic signature. Credentials are saved by upstream 3x-ui in
+/etc/x-ui/install-result.env (mode 600); do not copy this file into the project
+or write its secrets to logs. TLS mode ip is requested by default. Always verify
+the final access URL uses HTTPS before entering panel credentials.
+
+The installer must not modify SSH authentication, create system users, delete
+existing panel data, or automatically remove an existing 3x-ui installation.
+When x-ui exists, skip reinstallation to protect its database and inbounds.
+
+TESTING / RELEASE GATES
+=======================
+- bash -n succeeds on every .sh file.
+- ShellCheck reports no unreviewed issues.
+- test on a disposable Debian/Ubuntu VPS before tagging a release.
+- test fresh install, rerun on existing 3x-ui, UFW inactive/active, nonstandard
+  SSH port, BBR unavailable, ACME/TLS failure, and custom inbound ports.
+- verify a second run does not reinstall 3x-ui or overwrite credentials.
+- verify UFW never gets reset and existing active UFW defaults remain unchanged.
