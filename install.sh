@@ -39,6 +39,6 @@ bash "$BASE_DIR/scripts/system.sh"
 bash "$BASE_DIR/scripts/dependencies.sh"
 
 bash "$BASE_DIR/scripts/xray.sh"
-
+bash "$BASE_DIR/scripts/reality.sh"
 
 log_ok "Base installation completed"
