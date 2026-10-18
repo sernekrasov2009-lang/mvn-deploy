@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # bbr.sh — enable TCP BBR (+ fq) only when the kernel supports it.
 
 BBR_RESULT="skipped"   # enabled | unchanged | unsupported | failed | skipped

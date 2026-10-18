@@ -7,8 +7,14 @@ for _m in logger common; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
+load_user_config                                  # same precedence as install.sh: environment > config file > defaults
 # shellcheck source=config/defaults.conf
 source "${SELF_DIR}/config/defaults.conf"
+require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
+
+UPD_TMP=""
+cleanup_upd() { if [[ -n "${UPD_TMP}" ]]; then rm -rf -- "${UPD_TMP}"; fi; return 0; }
+trap cleanup_upd EXIT
 
 main() {
   local ref="${MVN_REF:-}" check=0
@@ -26,25 +32,30 @@ main() {
   [[ -f "${MVN_INSTALL_DIR}/install.sh" ]] || { echo "MVN Deploy is not installed in ${MVN_INSTALL_DIR}; run install.sh first." >&2; return 2; }
   log_init
 
-  local tmp new_ver old_ver="${MVN_VERSION}"
-  tmp="$(mktemp -d /tmp/mvn-deploy-upd.XXXXXX)"
-  trap 'rm -rf -- "${tmp}"' EXIT
-  bash "${MVN_INSTALL_DIR}/install.sh" --fetch-only "${tmp}/new" --ref "${ref}"   # verifies the checksum
-  new_ver="$(sed -n 's/^MVN_VERSION="\(.*\)"$/\1/p' "${tmp}/new/config/defaults.conf" | head -n 1)"
+  local new_ver old_ver="${MVN_VERSION}"
+  UPD_TMP="$(mktemp -d /tmp/mvn-deploy-upd.XXXXXX)"
+  bash "${MVN_INSTALL_DIR}/install.sh" --fetch-only "${UPD_TMP}/new" --ref "${ref}"   # verifies the checksum
+  new_ver="$(sed -n 's/^MVN_VERSION="\(.*\)"$/\1/p' "${UPD_TMP}/new/config/defaults.conf" | head -n 1)"
   [[ -n "${new_ver}" ]] || { log_error "Cannot read the version of the downloaded release"; return 1; }
   log_info "Installed: ${old_ver}  ->  target: ${new_ver} (${ref})"
   if ((check)); then log_info "Check only: nothing changed."; return 0; fi
 
   ( umask 077; mkdir -p -- "${MVN_BACKUP_DIR}" )
   chmod 700 -- "${MVN_BACKUP_DIR}"
-  local b="${MVN_BACKUP_DIR}/mvn-deploy-${old_ver}-$(date +%Y%m%d-%H%M%S).tar.gz"
+  local stamp b
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  b="${MVN_BACKUP_DIR}/mvn-deploy-${old_ver}-${stamp}.tar.gz"
   ( umask 077; tar -czf "${b}" -C "$(dirname -- "${MVN_INSTALL_DIR}")" "$(basename -- "${MVN_INSTALL_DIR}")" )
-  [[ -f /etc/mvn-deploy/mvn-deploy.conf ]] && cp -a /etc/mvn-deploy/mvn-deploy.conf "${MVN_BACKUP_DIR}/mvn-deploy.conf.$(date +%Y%m%d-%H%M%S)"
+  if [[ -f /etc/mvn-deploy/mvn-deploy.conf ]]; then cp -a /etc/mvn-deploy/mvn-deploy.conf "${MVN_BACKUP_DIR}/mvn-deploy.conf.${stamp}"; fi
   log_ok "Backup of the current version: ${b}"
 
   rm -rf -- "${MVN_INSTALL_DIR}.old"
   mv -- "${MVN_INSTALL_DIR}" "${MVN_INSTALL_DIR}.old"
-  mv -- "${tmp}/new" "${MVN_INSTALL_DIR}"
+  if ! mv -- "${UPD_TMP}/new" "${MVN_INSTALL_DIR}"; then
+    mv -- "${MVN_INSTALL_DIR}.old" "${MVN_INSTALL_DIR}"
+    log_error "Could not put the new version in place; the previous version was restored"
+    return 1
+  fi
   chmod 755 -- "${MVN_INSTALL_DIR}"
   rm -rf -- "${MVN_INSTALL_DIR}.old"
   state_set version "${new_ver}"

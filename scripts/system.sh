@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # system.sh — environment checks (read-only) and pre-change inventory.
 
 OS_ID=""; OS_VERSION_ID=""; OS_PRETTY=""; ARCH=""

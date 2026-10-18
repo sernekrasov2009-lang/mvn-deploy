@@ -54,6 +54,10 @@ if [[ "${EUID}" -eq 0 ]]; then
   assert_false bash -c "source '${ROOT}/scripts/logger.sh'; source '${ROOT}/scripts/common.sh'; MVN_CONFIG_FILE='${T}/bad2.conf' load_user_config"
 fi
 
+# safe directories (these get rm -rf'ed)
+assert_true safe_dir_ok /opt/mvn-deploy; assert_true safe_dir_ok /var/lib/mvn-deploy
+for bad in / /usr /opt /opt/foo /usr/local /opt/mvn-deploy/../etc relative/mvn-deploy "/opt/mvn deploy" ""; do assert_false safe_dir_ok "${bad}"; done
+
 # retry
 n=0; flaky() { n=$((n + 1)); ((n >= 3)); }
 assert_true retry 3 0 flaky 2> /dev/null

@@ -2,7 +2,7 @@
 # Local quality gate: bash -n, ShellCheck, git diff --check, secret scan, unit tests.
 set -uo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-cd "${ROOT}"
+cd "${ROOT}" || exit 1
 fail=0
 mapfile -t files < <(find . -name '*.sh' -not -path './.git/*' | sort)
 

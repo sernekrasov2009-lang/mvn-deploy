@@ -16,6 +16,7 @@ fi
 # log_init: create the log directory/file with restricted permissions.
 log_init() {
   LOG_FILE="${MVN_LOG_FILE:-/var/log/mvn-deploy/install.log}"
+  if [[ "${MVN_DRY_RUN:-0}" == "1" ]]; then LOG_READY=0; return 0; fi   # dry run: console only
   local dir
   dir="$(dirname -- "${LOG_FILE}")"
   # New directories are created 0700, the file 0600.

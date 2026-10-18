@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # three_x_ui.sh — installs 3x-ui through ITS OFFICIAL installer. Nothing else here
 # installs Xray, writes an Xray config or creates a separate xray.service.
 

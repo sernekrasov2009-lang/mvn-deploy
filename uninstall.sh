@@ -7,8 +7,11 @@ for _m in logger common; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
+load_user_config                                  # same precedence as install.sh: environment > config file > defaults
 # shellcheck source=config/defaults.conf
 source "${SELF_DIR}/config/defaults.conf"
+require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
+require_safe_dir MVN_STATE_DIR "${MVN_STATE_DIR}"
 
 REMOVE_XUI=0
 YES=0
@@ -30,6 +33,7 @@ USAGE
 done
 
 [[ "${EUID}" -eq 0 ]] || { echo "Run as root: sudo bash uninstall.sh" >&2; exit 2; }
+detect_interactivity
 log_init
 
 confirm() { ((YES)) && return 0; ask_yes_no "$1" n; }
@@ -64,7 +68,8 @@ main() {
   if ((REMOVE_XUI)); then
     ( umask 077; mkdir -p -- "${MVN_BACKUP_DIR}" )
     chmod 700 -- "${MVN_BACKUP_DIR}"
-    local b="${MVN_BACKUP_DIR}/x-ui-data-$(date +%Y%m%d-%H%M%S).tar.gz"
+    local b
+    b="${MVN_BACKUP_DIR}/x-ui-data-$(date +%Y%m%d-%H%M%S).tar.gz"
     if [[ -d /etc/x-ui ]]; then
       ( umask 077; tar -czf "${b}" -C / etc/x-ui )
       log_ok "3x-ui data backed up to ${b} (root only)"
@@ -75,9 +80,9 @@ main() {
   fi
 
   if confirm "Delete MVN Deploy's own files (${MVN_INSTALL_DIR}, ${MVN_STATE_DIR})? Logs are kept."; then
-    local keep_dir="${SELF_DIR}"
     rm -rf -- "${MVN_STATE_DIR}"
-    [[ "${keep_dir}" == "${MVN_INSTALL_DIR}" ]] && { cd /; rm -rf -- "${MVN_INSTALL_DIR}"; }
+    if [[ "${SELF_DIR}" == "${MVN_INSTALL_DIR}" ]]; then cd /; fi
+    rm -rf -- "${MVN_INSTALL_DIR}"
     log_ok "MVN Deploy files removed"
   fi
 }

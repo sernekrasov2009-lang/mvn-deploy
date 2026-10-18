@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # common.sh — helpers shared by all modules: errors, prompts, state, ports, report.
+# shellcheck disable=SC2034  # globals here are used by the scripts that source this file
 
 EXIT_FAIL=1       # a stage failed
 EXIT_PRECOND=2    # unsupported/invalid environment, nothing was changed
@@ -75,8 +76,24 @@ retry() {
   return "${rc}"
 }
 
+# ---------- directory safety ----------
+# Directories that MVN Deploy deletes with rm -rf must be absolute, at least two levels deep,
+# free of "..", and named after the project. This protects against a mistyped config value
+# such as MVN_INSTALL_DIR=/usr.
+safe_dir_ok() { # path
+  local p="${1:-}"
+  [[ "${p}" =~ ^/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$ ]] && [[ "${p}" != *..* ]] && [[ "${p##*/}" == *mvn-deploy* ]]
+}
+
+require_safe_dir() { # label path
+  safe_dir_ok "${2:-}" \
+    || die "${EXIT_PRECOND}" "$1 must be an absolute path (2+ levels) whose last part contains 'mvn-deploy'; got '${2:-}'"
+}
+
 # ---------- locking ----------
 acquire_lock() {
+  # A dry run must not create anything on the system.
+  if [[ "${MVN_DRY_RUN:-0}" == "1" ]]; then return 0; fi
   mkdir -p "$(dirname -- "${MVN_LOCK_FILE}")" 2> /dev/null || true
   exec 9> "${MVN_LOCK_FILE}" || die "${EXIT_PRECOND}" "Cannot open lock file ${MVN_LOCK_FILE}"
   flock -n 9 || die "${EXIT_FAIL}" "Another MVN Deploy run is in progress (lock: ${MVN_LOCK_FILE})"

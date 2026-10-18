@@ -23,7 +23,13 @@
 
 ## Установка
 
-Релиз (рекомендуется, после публикации тега):
+Автоустановка одной командой (без вопросов; сначала лучше добавить `--dry-run` и посмотреть план):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sernekrasov2009-lang/mvn-deploy/main/install.sh -o /tmp/mvn-deploy-install.sh && sudo MVN_ALLOW_DEV=1 bash /tmp/mvn-deploy-install.sh -y
+```
+
+Релиз с проверкой SHA-256 (рекомендуется, когда тег будет опубликован; сейчас такого тега ещё нет):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sernekrasov2009-lang/mvn-deploy/v1.0.0/install.sh -o /tmp/mvn-deploy-install.sh && sudo bash /tmp/mvn-deploy-install.sh

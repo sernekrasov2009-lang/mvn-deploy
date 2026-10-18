@@ -8,6 +8,7 @@
 # Development (mutable main, unverified; needs MVN_ALLOW_DEV=1):
 #   sudo MVN_ALLOW_DEV=1 bash /tmp/mvn-deploy-install.sh
 #
+# shellcheck disable=SC2034  # MVN_CONFIG_FILE / MVN_NONINTERACTIVE / MVN_DRY_RUN are read by sourced modules
 set -Eeuo pipefail
 
 MVN_REPO="sernekrasov2009-lang/mvn-deploy"
@@ -181,6 +182,8 @@ detect_interactivity
 load_user_config                                  # environment wins over the file
 # shellcheck source=config/defaults.conf
 source "${SELF_DIR}/config/defaults.conf"         # defaults only fill what is still unset
+require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
+require_safe_dir MVN_STATE_DIR "${MVN_STATE_DIR}"
 detect_interactivity
 log_init
 
@@ -233,7 +236,7 @@ stage_plan() {
     fi
   fi
 
-  if [[ "${MVN_FIREWALL}" != "skip" ]] && ! is_noninteractive && [[ "${MVN_DRY_RUN}" != "1" && "${MVN_APT_UPGRADE}" != "1" ]]; then
+  if ! is_noninteractive && [[ "${MVN_DRY_RUN}" != "1" && "${MVN_APT_UPGRADE}" != "1" ]]; then
     ask_yes_no "Also run an optional full 'apt upgrade'?" n && MVN_APT_UPGRADE=1
   fi
 
@@ -314,7 +317,7 @@ main() {
   run_stage "8. BBR" stage_bbr
   run_stage "9. Verification" stage_verify
   CURRENT_STAGE="10. Final report"
-  stage_report
+  stage_report || exit 1   # non-zero when verification found failures; not a crash
 }
 
 main

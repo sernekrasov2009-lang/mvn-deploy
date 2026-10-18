@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # security.sh — minimal, safe, reversible hardening of MVN Deploy's own footprint.
 # It deliberately does NOT touch sshd (port, root login, password auth) or reboot.
 
@@ -8,6 +9,7 @@ sec_prepare() {
   WORK_DIR="$(mktemp -d /tmp/mvn-deploy.XXXXXX)"   # mode 0700
 
   # Keep a persistent copy of the project so update.sh / uninstall.sh work later.
+  require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
   if [[ "${SELF_DIR}" != "${MVN_INSTALL_DIR}" ]]; then
     local new="${MVN_INSTALL_DIR}.new.$$"
     rm -rf -- "${new}"
