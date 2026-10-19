@@ -7,6 +7,17 @@ FW_ACTION="skip"            # skip | ufw-add | ufw-enable
 FW_SSH_PORTS=()
 FW_TCP_EXTRA=()
 FW_UDP_EXTRA=()
+FW_USER_TCP=()
+
+# fw_forget_acme_port: Let's Encrypt was not used after all, so port 80 is no longer needed.
+fw_forget_acme_port() {
+  local -a keep=()
+  local p
+  for p in "${FW_TCP_EXTRA[@]}"; do
+    if [[ "${p}" != "80" ]] || array_contains "80" "${FW_USER_TCP[@]}"; then keep+=("${p}"); fi
+  done
+  FW_TCP_EXTRA=("${keep[@]}")
+}
 
 fw_plan() {
   FW_ACTION="skip"
@@ -23,8 +34,9 @@ fw_plan() {
   fi
   parse_port_list FW_TCP_EXTRA "${MVN_EXTRA_TCP_PORTS}" || die "${EXIT_PRECOND}" "Invalid MVN_EXTRA_TCP_PORTS"
   parse_port_list FW_UDP_EXTRA "${MVN_EXTRA_UDP_PORTS}" || die "${EXIT_PRECOND}" "Invalid MVN_EXTRA_UDP_PORTS"
-  if [[ "${MVN_XUI_SSL_MODE}" != "none" ]] && ! array_contains "80" "${FW_TCP_EXTRA[@]}"; then
-    FW_TCP_EXTRA+=("80")   # needed by the Let's Encrypt HTTP-01 challenge
+  FW_USER_TCP=("${FW_TCP_EXTRA[@]}")
+  if [[ "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ]] && ! array_contains "80" "${FW_TCP_EXTRA[@]}"; then
+    FW_TCP_EXTRA+=("80")   # needed by the Let's Encrypt HTTP-01 challenge and its renewals
   fi
 
   local -a override=()

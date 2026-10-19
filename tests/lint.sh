@@ -25,7 +25,7 @@ if grep -rInE --exclude-dir=.git --exclude=lint.sh \
   -e '(password|passwd|token|secret)[A-Za-z_]*[[:space:]]*=[[:space:]]*["'\''][^"'\''$ ]{6,}["'\'']' .; then
   echo "possible secret committed"; fail=1
 fi
-if grep -rInE --exclude-dir=.git --exclude=lint.sh --exclude='*.md' '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' . | grep -vE '1\.1\.1\.1|127\.0\.0\.1|0\.0\.0\.0|1\.2\.3\.4|5\.6\.7\.8'; then
+if grep -rInE --exclude-dir=.git --exclude=lint.sh --exclude=unit.sh --exclude='*.md' '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' . | grep -vE '1\.1\.1\.1|127\.0\.0\.1|0\.0\.0\.0|1\.2\.3\.4|5\.6\.7\.8|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.'; then
   echo "hard-coded IP address found"; fail=1
 fi
 

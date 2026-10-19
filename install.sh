@@ -8,7 +8,7 @@
 # Development (mutable main, unverified; needs MVN_ALLOW_DEV=1):
 #   sudo MVN_ALLOW_DEV=1 bash /tmp/mvn-deploy-install.sh
 #
-# shellcheck disable=SC2034  # MVN_CONFIG_FILE / MVN_NONINTERACTIVE / MVN_DRY_RUN are read by sourced modules
+# shellcheck disable=SC2034  # MVN_* options set here are read by the sourced modules
 set -Eeuo pipefail
 
 MVN_REPO="sernekrasov2009-lang/mvn-deploy"
@@ -29,6 +29,9 @@ MVN Deploy — prepares a clean Debian/Ubuntu VPS: official 3x-ui, UFW, BBR, che
 Usage: sudo bash install.sh [options]
 
   -y, --yes, --non-interactive   never prompt; ambiguous/dangerous situations abort
+      --panel-port <port>        3x-ui panel port (default: ask, or random when unattended)
+      --ssl <mode>               panel HTTPS: auto | ip | domain | selfsigned | none
+      --domain <name>            domain for Let's Encrypt (implies --ssl domain when --ssl is not given)
       --dry-run, --plan          run checks and print the plan; change nothing
       --ref <tag|branch>         project version to download when bootstrapping
       --config <file>            user config (MVN_NAME=value lines)
@@ -37,7 +40,9 @@ Usage: sudo bash install.sh [options]
 
 Environment (also usable in /etc/mvn-deploy/mvn-deploy.conf): see docs/INSTALL.md
   MVN_FIREWALL=auto|skip  MVN_SSH_PORTS  MVN_EXTRA_TCP_PORTS  MVN_EXTRA_UDP_PORTS
-  MVN_BBR=auto|skip  MVN_XUI_VERSION  MVN_XUI_SSL_MODE=none|ip|domain  MVN_XUI_DOMAIN
+  MVN_BBR=auto|skip  MVN_XUI_VERSION  MVN_XUI_PANEL_PORT  MVN_XUI_DOMAIN
+  MVN_XUI_SSL_MODE=auto|ip|domain|selfsigned|none  MVN_XUI_SSL_FALLBACK=selfsigned|none
+  MVN_FAIL2BAN=auto|skip  MVN_F2B_MAXRETRY  MVN_F2B_FINDTIME  MVN_F2B_BANTIME  MVN_F2B_IGNORE_IPS
   MVN_ALLOW_CONFLICTS=1  MVN_APT_UPGRADE=1  MVN_FORCE_XUI_REINSTALL=1
   MVN_SHA256 (release archive checksum)  MVN_ALLOW_DEV=1 (allow unverified branch)
 USAGE
@@ -137,6 +142,9 @@ while (($#)); do
     -y | --yes | --non-interactive) MVN_NONINTERACTIVE=1 ;;
     --dry-run | --plan) MVN_DRY_RUN=1 ;;
     --ref) [[ $# -ge 2 ]] || _b_die "--ref needs a value"; MVN_REF="$2"; shift ;;
+    --panel-port) [[ $# -ge 2 ]] || _b_die "--panel-port needs a value"; MVN_XUI_PANEL_PORT="$2"; shift ;;
+    --ssl) [[ $# -ge 2 ]] || _b_die "--ssl needs a value"; MVN_XUI_SSL_MODE="$2"; shift ;;
+    --domain) [[ $# -ge 2 ]] || _b_die "--domain needs a value"; MVN_XUI_DOMAIN="$2"; shift ;;
     --config) [[ $# -ge 2 ]] || _b_die "--config needs a value"; MVN_CONFIG_FILE="$2"; shift ;;
     --fetch-only) [[ $# -ge 2 ]] || _b_die "--fetch-only needs a directory"; FETCH_ONLY_DEST="$2"; shift ;;
     *) _b_die "Unknown option: $1 (see --help)" ;;
@@ -170,7 +178,7 @@ fi
 # ============================================================================
 # Main layer
 # ============================================================================
-for _m in logger common system dependencies security three_x_ui firewall bbr verify; do
+for _m in logger common system dependencies security panel_tls three_x_ui firewall fail2ban bbr verify; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
@@ -242,16 +250,18 @@ stage_plan() {
 
   xui_plan
   fw_plan
+  f2b_plan
 
   plan_add "System: ${OS_PRETTY} (${ARCH})"
   deps_compute_missing
   plan_add "Packages to install: ${DEPS_MISSING[*]:-none}$([[ ${MVN_APT_UPGRADE} == 1 ]] && echo ' + full apt upgrade')"
   case "${XUI_ACTION}" in
-    install) plan_add "3x-ui: run the OFFICIAL installer (version: ${MVN_XUI_VERSION:-latest stable}, SSL mode: ${MVN_XUI_SSL_MODE})" ;;
-    reinstall) plan_add "3x-ui: RE-run the official installer (forced)" ;;
-    keep) plan_add "3x-ui: already installed — keep as is (only make sure the service runs)" ;;
+    install) plan_add "3x-ui: $(xui_plan_text)" ;;
+    reinstall) plan_add "3x-ui: RE-run the official installer (forced); $(xui_plan_text)" ;;
+    keep) plan_add "3x-ui: $(xui_plan_text)" ;;
   esac
   plan_add "Firewall: $(fw_plan_text)"
+  plan_add "Fail2ban: $(f2b_plan_text)"
   plan_add "BBR: $(bbr_plan_text)"
   plan_add "Not touched: sshd settings, provider (cloud) firewall, reboot, VPN clients/inbounds"
 
@@ -268,12 +278,13 @@ stage_plan() {
 stage_deps()     { deps_install; }
 stage_security() { sec_prepare; }
 stage_xui() {
-  if [[ "${MVN_XUI_SSL_MODE}" != "none" && "${FW_ACTION}" == "ufw-add" ]]; then
+  if [[ ( "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ) && "${FW_ACTION}" == "ufw-add" ]]; then
     fw_allow 80 tcp acme    # HTTP-01 challenge must pass while UFW is already active
   fi
   xui_apply
 }
 stage_firewall() { fw_apply; }
+stage_fail2ban() { f2b_apply; }
 stage_bbr()      { bbr_apply; }
 stage_verify()   { verify_all; }
 
@@ -293,7 +304,11 @@ stage_report() {
   echo
   echo "Next steps:"
   echo "  1. Check the firewall of your VPS provider (cloud panel): open the panel port and your VPN ports."
-  [[ "${XUI_PANEL_URL}" == http://* ]] && echo "  2. The panel runs over plain HTTP: use an SSH tunnel or set up TLS in 3x-ui before logging in over the internet."
+  if [[ "${XUI_SCHEME}" == "http" ]]; then
+    echo "  2. The panel runs over plain HTTP: log in through an SSH tunnel (ssh -L 8443:127.0.0.1:${XUI_PANEL_PORT_VAL:-<panel-port>} user@server), or enable HTTPS from the x-ui menu (run: x-ui, then SSL Certificate Management)."
+  elif [[ "${XUI_SSL_EFFECTIVE}" == "selfsigned" ]]; then
+    echo "  2. The panel uses a self-signed certificate: the browser shows a warning once; accept it. A domain + Let's Encrypt removes the warning."
+  fi
   echo "  3. Create inbounds/clients in the 3x-ui panel. For every new inbound port run, e.g.: ufw allow <port>/tcp"
   if ((${#MVN_WARNINGS[@]})); then
     echo
@@ -314,9 +329,10 @@ main() {
   run_stage "5. Security preparation" stage_security
   run_stage "6. 3x-ui" stage_xui
   run_stage "7. Firewall" stage_firewall
-  run_stage "8. BBR" stage_bbr
-  run_stage "9. Verification" stage_verify
-  CURRENT_STAGE="10. Final report"
+  run_stage "8. Fail2ban" stage_fail2ban
+  run_stage "9. BBR" stage_bbr
+  run_stage "10. Verification" stage_verify
+  CURRENT_STAGE="11. Final report"
   stage_report || exit 1   # non-zero when verification found failures; not a crash
 }
 

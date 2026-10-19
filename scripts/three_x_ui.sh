@@ -11,14 +11,6 @@ XUI_CREDS_NOTE=""
 XUI_INSTALLED_BY_US=0
 
 xui_plan() {
-  case "${MVN_XUI_SSL_MODE}" in
-    none | ip | domain) ;;
-    *) die "${EXIT_PRECOND}" "MVN_XUI_SSL_MODE must be none, ip or domain" ;;
-  esac
-  if [[ "${MVN_XUI_SSL_MODE}" == "domain" ]]; then
-    [[ "${MVN_XUI_DOMAIN}" =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$ ]] \
-      || die "${EXIT_PRECOND}" "MVN_XUI_SSL_MODE=domain requires a valid MVN_XUI_DOMAIN"
-  fi
   if [[ -n "${MVN_XUI_VERSION}" && ! "${MVN_XUI_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*$ ]]; then
     die "${EXIT_PRECOND}" "MVN_XUI_VERSION must look like v3.7.0 (or be empty for the latest stable release)"
   fi
@@ -37,6 +29,40 @@ xui_plan() {
   else
     XUI_ACTION="install"
   fi
+
+  if [[ "${XUI_ACTION}" == "keep" ]]; then
+    XUI_SSL_EFFECTIVE="existing"      # an existing panel is never reconfigured
+    return 0
+  fi
+
+  # Panel port and HTTPS: questions in interactive mode, flags/env/config otherwise.
+  xui_ask_options
+  xui_resolve_ssl_mode
+  if [[ -n "${MVN_XUI_PANEL_PORT}" ]]; then
+    if xui_port_problem "${MVN_XUI_PANEL_PORT}"; then
+      die "${EXIT_PRECOND}" "Panel port ${MVN_XUI_PANEL_PORT} cannot be used: ${XUI_PORT_PROBLEM}"
+    fi
+    if [[ "${MVN_XUI_PANEL_PORT}" == "443" ]]; then
+      log_warn "Panel on 443: VPN inbounds on 443 will not be possible while the panel uses it"
+    fi
+  fi
+  xui_ssl_preflight
+}
+
+xui_plan_text() {
+  case "${XUI_ACTION}" in
+    keep) printf 'already installed - kept as is (port, credentials and HTTPS are not changed)' ;;
+    *)
+      printf 'official installer (version: %s); panel port: %s; HTTPS: %s' \
+        "${MVN_XUI_VERSION:-latest stable}" "${MVN_XUI_PANEL_PORT:-random}" \
+        "$(case "${XUI_SSL_EFFECTIVE}" in
+          ip) printf "Let's Encrypt for the IP (fallback: %s)" "${MVN_XUI_SSL_FALLBACK}" ;;
+          domain) printf "Let's Encrypt for %s (fallback: %s)" "${MVN_XUI_DOMAIN}" "${MVN_XUI_SSL_FALLBACK}" ;;
+          selfsigned) printf 'self-signed certificate' ;;
+          none) printf 'none, plain HTTP' ;;
+        esac)"
+      ;;
+  esac
 }
 
 _xui_setting_show() { "${XUI_FOLDER}/x-ui" setting -show true 2> /dev/null || true; }
@@ -72,8 +98,15 @@ xui_run_installer() {
   fi
 
   local -a env_args=("XUI_NONINTERACTIVE=1") args=()
-  if [[ "${MVN_XUI_SSL_MODE}" != "none" ]]; then env_args+=("XUI_SSL_MODE=${MVN_XUI_SSL_MODE}"); fi
-  if [[ "${MVN_XUI_SSL_MODE}" == "domain" ]]; then env_args+=("XUI_DOMAIN=${MVN_XUI_DOMAIN}"); fi
+  # Let's Encrypt modes go to the installer; self-signed/none: the installer skips SSL and
+  # xui_tls_finalize adds the certificate afterwards.
+  case "${XUI_SSL_EFFECTIVE}" in
+    ip | domain) env_args+=("XUI_SSL_MODE=${XUI_SSL_EFFECTIVE}") ;;
+  esac
+  if [[ "${XUI_SSL_EFFECTIVE}" == "domain" ]]; then env_args+=("XUI_DOMAIN=${MVN_XUI_DOMAIN}"); fi
+  if [[ -n "${MVN_XUI_PANEL_PORT}" ]]; then env_args+=("XUI_PANEL_PORT=${MVN_XUI_PANEL_PORT}"); fi
+  if [[ -n "${MVN_XUI_ACME_EMAIL}" ]]; then env_args+=("XUI_ACME_EMAIL=${MVN_XUI_ACME_EMAIL}"); fi
+  if [[ -n "${XUI_PUBLIC_IP}" ]]; then env_args+=("XUI_SERVER_IP=${XUI_PUBLIC_IP}"); fi
   if [[ -n "${MVN_XUI_VERSION}" ]]; then args+=("${MVN_XUI_VERSION}"); fi
 
   log_info "Running the 3x-ui installer (unattended). This can take a few minutes..."
@@ -93,7 +126,7 @@ xui_run_installer() {
 }
 
 xui_collect_info() {
-  local port="" path="" url="" scheme="http" cert host
+  local port="" path="" url="" host="" rest
   XUI_CREDS_NOTE=""
 
   if [[ -r "${XUI_RESULT_FILE}" ]]; then
@@ -120,17 +153,21 @@ xui_collect_info() {
     return 0
   fi
   [[ "${path}" =~ ^[A-Za-z0-9/_-]*$ ]] || path=""
+  path="${path#/}"
 
-  if [[ "${url}" =~ ^https?://[^[:space:]]+$ && "${url}" != *SERVER_IP_UNKNOWN* ]]; then
-    XUI_PANEL_URL="${url}"
-  else
-    if [[ -x "${XUI_FOLDER}/x-ui" ]]; then
-      cert="$("${XUI_FOLDER}/x-ui" setting -getCert true 2> /dev/null | sed -n 's/^[[:space:]]*cert:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]' || true)"
-      [[ -n "${cert}" ]] && scheme="https"
-    fi
-    host="$(ip -4 route get 1.1.1.1 2> /dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
-    XUI_PANEL_URL="${scheme}://${host:-<server-ip>}:${port}/${path#/}"
+  # Ask the panel itself whether it speaks HTTPS: the installer's own summary can be wrong.
+  xui_probe_scheme "${XUI_PANEL_PORT_VAL}" "${path}" || log_warn "The panel did not answer on 127.0.0.1:${XUI_PANEL_PORT_VAL}"
+
+  # Host for the address: the domain we configured, else the host of the installer's URL, else the public IP.
+  if [[ "${XUI_INSTALLED_BY_US}" == "1" && -n "${MVN_XUI_DOMAIN}" && ( "${XUI_SSL_EFFECTIVE}" == "domain" || "${XUI_SSL_EFFECTIVE}" == "selfsigned" ) ]]; then
+    host="${MVN_XUI_DOMAIN}"
+  elif [[ "${url}" =~ ^https?://([^/:[:space:]]+) && "${BASH_REMATCH[1]}" != *SERVER_IP_UNKNOWN* ]]; then
+    host="${BASH_REMATCH[1]}"
   fi
+  if [[ -z "${host}" ]]; then host="${XUI_PUBLIC_IP}"; fi
+  if [[ -z "${host}" ]]; then host="$(_local_src_ipv4)"; fi
+  rest="${XUI_PANEL_PORT_VAL}/${path}"
+  XUI_PANEL_URL="${XUI_SCHEME:-http}://${host:-<server-ip>}:${rest}"
 }
 
 xui_apply() {
@@ -148,9 +185,11 @@ xui_apply() {
   esac
   xui_wait_active || die "${EXIT_FAIL}" "x-ui is not running"
   sec_protect_secrets
+  xui_tls_finalize
+  if [[ "${XUI_SSL_EFFECTIVE}" != "ip" && "${XUI_SSL_EFFECTIVE}" != "domain" ]]; then fw_forget_acme_port; fi
   xui_collect_info
   if [[ "${XUI_INSTALLED_BY_US}" == "1" ]]; then state_set xui_installed_by_mvn 1; fi
   if [[ -n "${XUI_PANEL_PORT_VAL}" ]]; then state_set panel_port "${XUI_PANEL_PORT_VAL}"; fi
   log_ok "3x-ui service is active (panel port: ${XUI_PANEL_PORT_VAL:-unknown})"
-  report_add "3x-ui" "OK" "${XUI_ACTION}; service active"
+  report_add "3x-ui" "OK" "${XUI_ACTION}; service active; ${XUI_SCHEME:-no-answer}${XUI_TLS_NOTE:+; ${XUI_TLS_NOTE}}"
 }

@@ -11,6 +11,7 @@ _pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2> /dev/null | has_match 'i
 deps_compute_missing() {
   local -a want=(ca-certificates curl tar openssl iproute2 procps kmod util-linux)
   if [[ "${FW_ACTION:-skip}" == "ufw-enable" ]]; then want+=(ufw); fi
+  if [[ "${F2B_ACTION:-skip}" == "install" ]]; then want+=(fail2ban python3-systemd); fi
   DEPS_MISSING=()
   local p
   for p in "${want[@]}"; do

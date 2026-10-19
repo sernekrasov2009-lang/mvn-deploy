@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Unit tests for pure helper functions (no root, no systemd required).
+# shellcheck disable=SC1090,SC2034  # sourced modules and variables used by them
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/logger.sh"; source "${ROOT}/scripts/common.sh"
+for _m in panel_tls three_x_ui fail2ban; do source "${ROOT}/scripts/${_m}.sh"; done; unset _m
 MVN_NONINTERACTIVE=1
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 PASS=0; FAIL=0
@@ -57,6 +59,85 @@ fi
 # safe directories (these get rm -rf'ed)
 assert_true safe_dir_ok /opt/mvn-deploy; assert_true safe_dir_ok /var/lib/mvn-deploy
 for bad in / /usr /opt /opt/foo /usr/local /opt/mvn-deploy/../etc relative/mvn-deploy "/opt/mvn deploy" ""; do assert_false safe_dir_ok "${bad}"; done
+
+# panel HTTPS helpers
+assert_true _valid_domain vpn.example.com; assert_false _valid_domain "bad domain"; assert_false _valid_domain localhost; assert_false _valid_domain "a.b;rm"
+assert_true _valid_ipv4 203.0.113.7; assert_false _valid_ipv4 999.1.1.1; assert_false _valid_ipv4 1.2.3
+for ip in 10.1.2.3 192.168.0.5 172.16.9.9 172.31.1.1 127.0.0.1 100.64.0.1 169.254.1.1; do assert_true _is_private_ipv4 "${ip}"; done
+for ip in 8.8.8.8 172.32.0.1 100.128.0.1 203.0.113.7; do assert_false _is_private_ipv4 "${ip}"; done
+MVN_XUI_DOMAIN=""; MVN_XUI_SSL_MODE=""; xui_resolve_ssl_mode; assert_eq "${XUI_SSL_EFFECTIVE}" "ip" "auto without domain -> ip"
+MVN_XUI_DOMAIN="vpn.example.com"; xui_resolve_ssl_mode; assert_eq "${XUI_SSL_EFFECTIVE}" "domain" "auto with domain -> domain"
+MVN_XUI_SSL_MODE="selfsigned"; xui_resolve_ssl_mode; assert_eq "${XUI_SSL_EFFECTIVE}" "selfsigned" "explicit selfsigned"
+MVN_XUI_SSL_MODE="none"; xui_resolve_ssl_mode; assert_eq "${XUI_SSL_EFFECTIVE}" "none" "explicit none"
+MVN_XUI_DOMAIN=""; MVN_XUI_SSL_MODE="domain"
+assert_false bash -c "source '${ROOT}/scripts/logger.sh'; source '${ROOT}/scripts/common.sh'; source '${ROOT}/scripts/panel_tls.sh'; MVN_XUI_SSL_MODE=domain MVN_XUI_DOMAIN='' xui_resolve_ssl_mode" 2> /dev/null
+assert_false bash -c "source '${ROOT}/scripts/logger.sh'; source '${ROOT}/scripts/common.sh'; source '${ROOT}/scripts/panel_tls.sh'; MVN_XUI_SSL_MODE=bogus xui_resolve_ssl_mode" 2> /dev/null
+SSH_PORTS_DETECTED=(22 2222)
+assert_true xui_port_problem 22; assert_true xui_port_problem 2222; assert_true xui_port_problem 80; assert_true xui_port_problem abc; assert_true xui_port_problem 70000
+assert_false xui_port_problem 48217
+
+# self-signed certificate against a fake x-ui, then scheme probing against real servers
+mkdir -p "${T}/xui" "${T}/bin"
+printf '#!/usr/bin/env bash\necho "$@" >> "%s/xui-calls"\n[[ "$1 $2 $3" == "setting -getCert true" ]] && echo "cert: ${FAKE_CERT:-}"\nexit 0\n' "${T}" > "${T}/xui/x-ui"; chmod +x "${T}/xui/x-ui"
+printf '#!/bin/sh\nexit 0\n' > "${T}/bin/systemctl"; chmod +x "${T}/bin/systemctl"
+XUI_FOLDER="${T}/xui"; MVN_TLS_DIR="${T}/tls"; XUI_PUBLIC_IP="203.0.113.7"; MVN_XUI_DOMAIN=""
+OLDPATH="${PATH}"; PATH="${T}/bin:${PATH}"
+assert_true xui_make_selfsigned
+assert_eq "$(stat -c %a "${MVN_TLS_DIR}/key.pem")" "600" "self-signed key mode"
+assert_true grep -q "IP Address:203.0.113.7" <(openssl x509 -in "${MVN_TLS_DIR}/cert.pem" -noout -ext subjectAltName)
+assert_true grep -q "cert -webCert ${MVN_TLS_DIR}/cert.pem -webCertKey ${MVN_TLS_DIR}/key.pem" "${T}/xui-calls"
+MVN_XUI_DOMAIN="vpn.example.com"; assert_true xui_make_selfsigned
+assert_true grep -q "DNS:vpn.example.com" <(openssl x509 -in "${MVN_TLS_DIR}/cert.pem" -noout -ext subjectAltName)
+
+# Let's Encrypt did not produce a certificate -> verified fallback to self-signed
+XUI_INSTALLED_BY_US=1; XUI_SSL_EFFECTIVE="ip"; MVN_XUI_SSL_FALLBACK="selfsigned"; MVN_XUI_DOMAIN=""; FAKE_CERT=""; export FAKE_CERT
+rm -rf "${MVN_TLS_DIR}"; xui_tls_finalize 2> /dev/null
+assert_eq "${XUI_SSL_EFFECTIVE}" "selfsigned" "LE failed -> selfsigned"; assert_true test -s "${MVN_TLS_DIR}/cert.pem"
+# Let's Encrypt worked -> nothing is replaced
+XUI_SSL_EFFECTIVE="ip"; FAKE_CERT="/root/cert/ip/fullchain.pem"; rm -rf "${MVN_TLS_DIR}"; xui_tls_finalize 2> /dev/null
+assert_eq "${XUI_SSL_EFFECTIVE}" "ip" "LE ok stays ip"; assert_false test -e "${MVN_TLS_DIR}/cert.pem"
+# fallback none -> stays on HTTP, no certificate made
+XUI_SSL_EFFECTIVE="domain"; MVN_XUI_SSL_FALLBACK="none"; FAKE_CERT=""; xui_tls_finalize 2> /dev/null
+assert_eq "${XUI_SSL_EFFECTIVE}" "none" "LE failed + fallback none"
+# interactive questions (answers fed through a stub)
+is_noninteractive() { return 1; }
+feed() { printf '%s\n' "$@" > "${T}/answers"; }
+ask_value() { local a; a="$(head -n 1 "${T}/answers")"; sed -i '1d' "${T}/answers"; printf '%s' "${a}"; }
+feed 48217 2
+MVN_DRY_RUN=0; MVN_XUI_PANEL_PORT=""; MVN_XUI_SSL_MODE=""; MVN_XUI_DOMAIN="vpn.example.com"
+xui_ask_options > /dev/null
+assert_eq "${MVN_XUI_PANEL_PORT}" "48217" "asked port"; assert_eq "${MVN_XUI_SSL_MODE}" "domain" "asked mode"
+feed 22 "" 3; MVN_XUI_PANEL_PORT=""; MVN_XUI_SSL_MODE=""; xui_ask_options > /dev/null 2>&1
+assert_eq "${MVN_XUI_PANEL_PORT}" "" "SSH port refused, Enter = random"; assert_eq "${MVN_XUI_SSL_MODE}" "selfsigned" "asked selfsigned"
+unset -f is_noninteractive ask_value
+source "${ROOT}/scripts/common.sh"
+PATH="${OLDPATH}"
+
+if command -v python3 > /dev/null 2>&1; then
+  free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])'; }
+  XUI_PROBE_TRIES=3
+  PATH="${T}/bin:${OLDPATH}"; MVN_XUI_DOMAIN=""; xui_make_selfsigned > /dev/null 2>&1; PATH="${OLDPATH}"
+  hp="$(free_port)"; python3 -m http.server "${hp}" --bind 127.0.0.1 > /dev/null 2>&1 & hpid=$!
+  sp="$(free_port)"
+  python3 - "${sp}" "${MVN_TLS_DIR}/cert.pem" "${MVN_TLS_DIR}/key.pem" > /dev/null 2>&1 << 'PYEOF' &
+import http.server, ssl, sys
+srv = http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), http.server.SimpleHTTPRequestHandler)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(sys.argv[2], sys.argv[3])
+srv.socket = ctx.wrap_socket(srv.socket, server_side=True); srv.serve_forever()
+PYEOF
+  spid=$!
+  sleep 1.5
+  xui_probe_scheme "${hp}" "" || true; assert_eq "${XUI_SCHEME}" "http" "probe plain http"
+  xui_probe_scheme "${sp}" "" || true; assert_eq "${XUI_SCHEME}" "https" "probe https (self-signed)"
+  kill "${hpid}" "${spid}" 2> /dev/null || true; wait 2> /dev/null || true
+  assert_false xui_probe_scheme "$(free_port)" ""; assert_eq "${XUI_SCHEME}" "" "probe closed port"
+fi
+
+# fail2ban jail rendering
+F2B_PORTS=(22 2222); MVN_F2B_MAXRETRY=5; MVN_F2B_FINDTIME=10m; MVN_F2B_BANTIME=1h
+jail="$(f2b_render systemd "127.0.0.1/8 ::1 198.51.100.4")"
+assert_true grep -qx "port = 22,2222" <<< "${jail}"; assert_true grep -qx "backend = systemd" <<< "${jail}"
+assert_true grep -qx "ignoreip = 127.0.0.1/8 ::1 198.51.100.4" <<< "${jail}"; assert_true grep -qx "maxretry = 5" <<< "${jail}"
 
 # retry
 n=0; flaky() { n=$((n + 1)); ((n >= 3)); }

@@ -30,6 +30,11 @@ verify_all() {
   else
     _v_warn "Panel port is unknown"
   fi
+  case "${XUI_SCHEME}" in
+    https) _v_ok "Panel answers over HTTPS${XUI_TLS_NOTE:+ (${XUI_TLS_NOTE})}" ;;
+    http) _v_warn "Panel answers over plain HTTP: do not log in over the internet without an SSH tunnel or TLS" ;;
+    *) _v_warn "Panel did not answer locally on port ${XUI_PANEL_PORT_VAL:-?}" ;;
+  esac
 
   # Credentials
   if [[ -f "${XUI_RESULT_FILE}" ]]; then
@@ -58,6 +63,9 @@ verify_all() {
       fi
       ;;
   esac
+
+  # Fail2ban
+  f2b_verify
 
   # BBR
   case "${BBR_RESULT}" in

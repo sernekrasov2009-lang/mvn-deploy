@@ -85,8 +85,8 @@ sys_check_network() {
 }
 
 # ---------- inventory ----------
-_session_ssh_port() { # prints the server port of the current SSH session, if any
-  local pid=$$ conn="${SSH_CONNECTION:-}" ppid guard=0 _a _b _c port
+_session_ssh_conn() { # prints "client_ip client_port server_ip server_port" of the current SSH session, if any
+  local pid=$$ conn="${SSH_CONNECTION:-}" ppid guard=0
   while [[ -z "${conn}" && "${pid}" -gt 1 && "${guard}" -lt 30 ]]; do
     if [[ -r "/proc/${pid}/environ" ]]; then
       conn="$(tr '\0' '\n' < "/proc/${pid}/environ" 2> /dev/null | sed -n 's/^SSH_CONNECTION=//p' | head -n 1 || true)"
@@ -95,9 +95,25 @@ _session_ssh_port() { # prints the server port of the current SSH session, if an
     [[ -n "${ppid}" && "${ppid}" != "${pid}" ]] || break
     pid="${ppid}"; guard=$((guard + 1))
   done
+  if [[ -n "${conn}" ]]; then printf '%s\n' "${conn}"; fi
+  return 0
+}
+
+_session_ssh_port() { # prints the server port of the current SSH session, if any
+  local conn _a _b _c port
+  conn="$(_session_ssh_conn)"
   [[ -n "${conn}" ]] || return 0
   read -r _a _b _c port <<< "${conn}"
   valid_port "${port:-}" && printf '%s\n' "${port}"
+  return 0
+}
+
+_session_ssh_client_ip() { # prints the client address of the current SSH session, if any
+  local conn ip _b
+  conn="$(_session_ssh_conn)"
+  [[ -n "${conn}" ]] || return 0
+  read -r ip _b <<< "${conn}"
+  [[ "${ip}" =~ ^[0-9A-Fa-f:.]+$ ]] && printf '%s\n' "${ip}"
   return 0
 }
 

@@ -42,7 +42,8 @@ main() {
   echo "MVN Deploy uninstall will:"
   echo "  - remove ${MVN_STATE_DIR}-tracked files: BBR sysctl/modules files created by MVN Deploy"
   echo "  - delete UFW rules created by MVN Deploy EXCEPT SSH rules (removing them could lock you out)"
-  echo "  - keep UFW enabled state, 3x-ui, its database and Xray untouched"
+  echo "  - remove the fail2ban jail file created by MVN Deploy (the fail2ban package stays installed)"
+  echo "  - keep UFW enabled state, 3x-ui, its database, its certificate and Xray untouched"
   confirm "Proceed?" || { echo "Aborted."; exit 3; }
 
   local f spec role
@@ -52,6 +53,13 @@ main() {
   done
   if command -v sysctl > /dev/null 2>&1; then run_logged sysctl --system || true; fi
   log_info "Live BBR setting stays until the next reboot; nothing else was reverted."
+
+  local jail="/etc/fail2ban/jail.d/mvn-deploy.local"
+  if [[ -f "${jail}" && -n "$(state_get f2b_jail)" ]]; then
+    rm -f -- "${jail}"
+    if systemctl is-active --quiet fail2ban 2> /dev/null; then run_logged systemctl restart fail2ban || true; fi
+    log_ok "Removed the fail2ban jail ${jail} (the fail2ban package was left installed)"
+  fi
 
   if command -v ufw > /dev/null 2>&1; then
     while read -r spec role; do

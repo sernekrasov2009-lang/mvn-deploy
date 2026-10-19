@@ -23,11 +23,35 @@
 
 ## Установка
 
-Автоустановка одной командой (без вопросов; сначала лучше добавить `--dry-run` и посмотреть план):
+Скачать и запустить (скрипт сам спросит порт панели и вид HTTPS):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sernekrasov2009-lang/mvn-deploy/main/install.sh -o /tmp/mvn-deploy-install.sh && sudo MVN_ALLOW_DEV=1 bash /tmp/mvn-deploy-install.sh -y
+curl -fsSL https://raw.githubusercontent.com/sernekrasov2009-lang/mvn-deploy/main/install.sh -o /tmp/mvn-deploy-install.sh && sudo MVN_ALLOW_DEV=1 bash /tmp/mvn-deploy-install.sh
 ```
+
+Автоустановка без вопросов (`-y`): случайный порт панели, HTTPS автоматически, fail2ban включён. Порт под ваш inbound откройте сразу (`MVN_EXTRA_TCP_PORTS`):
+
+```bash
+sudo MVN_ALLOW_DEV=1 MVN_EXTRA_TCP_PORTS=443 bash /tmp/mvn-deploy-install.sh -y
+```
+
+С доменом и своим портом панели (DNS-запись A домена должна уже указывать на сервер):
+
+```bash
+sudo MVN_ALLOW_DEV=1 MVN_EXTRA_TCP_PORTS=443 bash /tmp/mvn-deploy-install.sh -y --domain vpn.example.com --panel-port 54321
+```
+
+Сначала можно добавить `--dry-run`: покажет план и ничего не изменит.
+
+| Параметр | Значения | Что делает |
+|---|---|---|
+| `--panel-port N` | 1–65535 | порт панели (по умолчанию: спросит или случайный) |
+| `--ssl` | `auto` `ip` `domain` `selfsigned` `none` | HTTPS панели; `auto` = домен, если задан, иначе IP |
+| `--domain имя` | vpn.example.com | сертификат Let's Encrypt для домена |
+| `MVN_XUI_SSL_FALLBACK` | `selfsigned` (по умолчанию) `none` | что делать, если Let's Encrypt не выдал сертификат |
+| `MVN_FAIL2BAN` | `auto` `skip` | защита SSH от подбора пароля |
+
+HTTPS проверяется по факту: если Let's Encrypt не сработал (порт 80 закрыт, неверный DNS), панель не остаётся на HTTP, а получает самоподписанный сертификат (браузер один раз предупредит).
 
 Релиз с проверкой SHA-256 (рекомендуется, когда тег будет опубликован; сейчас такого тега ещё нет):
 
