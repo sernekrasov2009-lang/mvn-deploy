@@ -175,7 +175,7 @@ scripts/    platform system dependencies security panel_tls three_x_ui
             firewall fail2ban bbr verify logger common
 docs/       INSTALL COMPATIBILITY TROUBLESHOOTING SECURITY MIGRATION SPECIFICATION
 tests/      lint.sh unit.sh               tools/make-release.sh
-.github/workflows/ci.yml                     lint, dry-run на 17 образах, реальная установка на Ubuntu
+.github/workflows/ci.yml                     lint, dry-run на 16 образах, реальная установка на Ubuntu
 ```
 
 ## Разработка
