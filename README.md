@@ -76,14 +76,14 @@ sudo MVN_ALLOW_DEV=1 MVN_EXTRA_TCP_PORTS=443 bash /tmp/mvn-deploy-install.sh -y 
 
 | Семейство | Дистрибутивы | Минимум | Пакеты | Firewall | Проверка |
 |---|---|---|---|---|---|
-| Debian | Debian, Ubuntu, Armbian и производные (Mint, Kali, Pop!_OS…) | Debian 11, Ubuntu 20.04 | apt | UFW | **Полная установка в CI**: Ubuntu 22.04 и 24.04; dry-run: Debian 11–13, Ubuntu 20.04–24.04 |
+| Debian | Debian, Ubuntu, Armbian и производные (Mint, Kali, Pop!_OS…) | Debian 12, Ubuntu 20.04 | apt | UFW | **Полная установка в CI**: Ubuntu 22.04 и 24.04; dry-run: Debian 12–13, Ubuntu 20.04–24.04 |
 | RHEL | AlmaLinux, Rocky, RHEL, Oracle Linux, CentOS Stream, Fedora, Amazon Linux | 8 / Fedora 39 / AL2023 | dnf, yum | firewalld | Dry-run в CI |
 | Arch | Arch Linux, Manjaro | rolling | pacman | UFW | Dry-run в CI (Arch) |
 | SUSE | openSUSE Leap, Tumbleweed | Leap 15.5 | zypper | firewalld | Dry-run в CI |
 | Alpine | Alpine Linux (OpenRC) | 3.18 | apk | UFW | Dry-run в CI, **экспериментально** |
 
 Архитектуры: `amd64`, `arm64` (основные), `armv7`, `armv6`, `armv5`, `386`, `s390x` (поддерживает 3x-ui, у нас не тестируются).
-Устаревшие и неизвестные системы (CentOS 7, Ubuntu 18.04, Debian 10…) отклоняются; принудительно: `MVN_ALLOW_UNSUPPORTED_OS=1`.
+Устаревшие и неизвестные системы (CentOS 7, Ubuntu 18.04, Debian 10/11…) отклоняются; принудительно: `MVN_ALLOW_UNSUPPORTED_OS=1`.
 Подробнее: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## Параметры

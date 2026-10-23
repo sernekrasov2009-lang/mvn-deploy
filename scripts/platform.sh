@@ -28,7 +28,7 @@ plat_classify() {
   local id="${1:-}" like="${2:-}" ver="${3:-}" min=""
   PLAT_FAMILY=""; PLAT_SUPPORT="unknown"; PLAT_NOTE=""
   case "${id}" in
-    debian)                       PLAT_FAMILY="debian"; min="11" ;;
+    debian)                       PLAT_FAMILY="debian"; min="12" ;;
     ubuntu)                       PLAT_FAMILY="debian"; min="20.04" ;;
     armbian | raspbian)           PLAT_FAMILY="debian"; min="" ;;
     rhel | almalinux | rocky | ol) PLAT_FAMILY="rhel"; min="8" ;;

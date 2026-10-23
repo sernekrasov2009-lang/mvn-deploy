@@ -63,7 +63,7 @@ for bad in / /usr /opt /opt/foo /usr/local /opt/mvn-deploy/../etc relative/mvn-d
 # distribution classification
 cls() { plat_classify "$@"; printf '%s/%s' "${PLAT_FAMILY}" "${PLAT_SUPPORT}"; }
 assert_eq "$(cls debian "" 12)" "debian/supported" "debian 12"; assert_eq "$(cls debian "" "")" "debian/supported" "debian testing/sid"
-assert_eq "$(cls debian "" 10)" "debian/old" "debian 10"; assert_eq "$(cls ubuntu debian 24.04)" "debian/supported" "ubuntu 24.04"
+assert_eq "$(cls debian "" 10)" "debian/old" "debian 10"; assert_eq "$(cls debian "" 11)" "debian/old" "debian 11 is EOL"; assert_eq "$(cls ubuntu debian 24.04)" "debian/supported" "ubuntu 24.04"
 assert_eq "$(cls ubuntu debian 18.04)" "debian/old" "ubuntu 18.04"; assert_eq "$(cls ubuntu debian 26.04)" "debian/supported" "newer ubuntu"
 assert_eq "$(cls linuxmint "ubuntu debian" 22)" "debian/derivative" "mint"; assert_eq "$(cls kali debian 2025.3)" "debian/derivative" "kali"
 assert_eq "$(cls almalinux "rhel centos fedora" 9.4)" "rhel/supported" "alma 9"; assert_eq "$(cls rocky "rhel centos fedora" 8.10)" "rhel/supported" "rocky 8"

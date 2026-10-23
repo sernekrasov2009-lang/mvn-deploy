@@ -7,7 +7,7 @@ MVN Deploy определяет систему по `/etc/os-release` и под�
 
 | Семейство | `ID` | Минимальная версия | Пакеты | Firewall | Службы |
 |---|---|---|---|---|---|
-| Debian | `debian`, `ubuntu`, `armbian`, `raspbian` | Debian 11, Ubuntu 20.04 (новее принимаются) | apt | UFW | systemd |
+| Debian | `debian`, `ubuntu`, `armbian`, `raspbian` | Debian 12 (Debian 11 снят с поддержки в августе 2026), Ubuntu 20.04 (новее принимаются) | apt | UFW | systemd |
 | Производные Debian | любые с `ID_LIKE=debian` или `ubuntu` | как у основы | apt | UFW | systemd |
 | RHEL | `rhel`, `almalinux`, `rocky`, `ol`, `centos` (Stream) | 8 | dnf (yum) | firewalld | systemd |
 | Fedora | `fedora` | 39 | dnf | firewalld | systemd |
@@ -24,7 +24,7 @@ MVN Deploy определяет систему по `/etc/os-release` и под�
 CI (`.github/workflows/ci.yml`) на каждый коммит:
 
 - lint (ShellCheck, `bash -n`, поиск секретов) и unit-тесты;
-- **dry-run** в контейнерах: Debian 11/12/13, Ubuntu 20.04/22.04/24.04, AlmaLinux 8/9, Rocky 9, Oracle Linux 9, Fedora, Amazon Linux 2023,
+- **dry-run** в контейнерах: Debian 12/13, Ubuntu 20.04/22.04/24.04, AlmaLinux 8/9, Rocky 9, Oracle Linux 9, Fedora, Amazon Linux 2023,
   CentOS Stream 9, Arch, openSUSE Leap/Tumbleweed, Alpine: определение семейства, пакетного менеджера и план;
 - **полная установка** на чистых Ubuntu 22.04 и 24.04: 3x-ui, HTTPS, UFW, fail2ban, BBR, повторный запуск и удаление.
 

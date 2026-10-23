@@ -7,7 +7,7 @@
 
 | Симптом | Причина и решение |
 |---|---|
-| `Unsupported system` | Дистрибутив неизвестен или слишком старый (Debian 10, Ubuntu 18.04, CentOS 7…). См. [COMPATIBILITY.md](COMPATIBILITY.md). Принудительно: `MVN_ALLOW_UNSUPPORTED_OS=1` |
+| `Unsupported system` | Дистрибутив неизвестен или слишком старый (Debian 10/11, Ubuntu 18.04, CentOS 7…). См. [COMPATIBILITY.md](COMPATIBILITY.md). Принудительно: `MVN_ALLOW_UNSUPPORTED_OS=1` |
 | `Unsupported CPU architecture` | 3x-ui не собирается под эту архитектуру (например, riscv64) |
 | `No supported init system` | Контейнер без systemd/OpenRC. Нужна полноценная виртуальная машина |
 | `No supported package manager` | Не найден apt/dnf/yum/zypper/pacman/apk |
