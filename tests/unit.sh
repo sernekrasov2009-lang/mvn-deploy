@@ -5,7 +5,7 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/logger.sh"; source "${ROOT}/scripts/common.sh"
-for _m in panel_tls three_x_ui fail2ban; do source "${ROOT}/scripts/${_m}.sh"; done; unset _m
+for _m in platform panel_tls three_x_ui firewall fail2ban; do source "${ROOT}/scripts/${_m}.sh"; done; unset _m
 MVN_NONINTERACTIVE=1
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 PASS=0; FAIL=0
@@ -59,6 +59,64 @@ fi
 # safe directories (these get rm -rf'ed)
 assert_true safe_dir_ok /opt/mvn-deploy; assert_true safe_dir_ok /var/lib/mvn-deploy
 for bad in / /usr /opt /opt/foo /usr/local /opt/mvn-deploy/../etc relative/mvn-deploy "/opt/mvn deploy" ""; do assert_false safe_dir_ok "${bad}"; done
+
+# distribution classification
+cls() { plat_classify "$@"; printf '%s/%s' "${PLAT_FAMILY}" "${PLAT_SUPPORT}"; }
+assert_eq "$(cls debian "" 12)" "debian/supported" "debian 12"; assert_eq "$(cls debian "" "")" "debian/supported" "debian testing/sid"
+assert_eq "$(cls debian "" 10)" "debian/old" "debian 10"; assert_eq "$(cls ubuntu debian 24.04)" "debian/supported" "ubuntu 24.04"
+assert_eq "$(cls ubuntu debian 18.04)" "debian/old" "ubuntu 18.04"; assert_eq "$(cls ubuntu debian 26.04)" "debian/supported" "newer ubuntu"
+assert_eq "$(cls linuxmint "ubuntu debian" 22)" "debian/derivative" "mint"; assert_eq "$(cls kali debian 2025.3)" "debian/derivative" "kali"
+assert_eq "$(cls almalinux "rhel centos fedora" 9.4)" "rhel/supported" "alma 9"; assert_eq "$(cls rocky "rhel centos fedora" 8.10)" "rhel/supported" "rocky 8"
+assert_eq "$(cls rhel fedora 10.0)" "rhel/supported" "rhel 10"; assert_eq "$(cls ol fedora 9.3)" "rhel/supported" "oracle 9"
+assert_eq "$(cls centos rhel 7)" "rhel/old" "centos 7"; assert_eq "$(cls centos "rhel fedora" 9)" "rhel/supported" "centos stream 9"
+assert_eq "$(cls fedora "" 42)" "rhel/supported" "fedora 42"; assert_eq "$(cls amzn "fedora" 2023)" "rhel/supported" "amazon 2023"; assert_eq "$(cls amzn "centos rhel fedora" 2)" "rhel/old" "amazon 2"
+assert_eq "$(cls arch "" "")" "arch/supported" "arch"; assert_eq "$(cls manjaro arch "")" "arch/supported" "manjaro"
+assert_eq "$(cls opensuse-leap "suse opensuse" 15.6)" "suse/supported" "leap 15.6"; assert_eq "$(cls opensuse-tumbleweed "opensuse suse" 20261001)" "suse/supported" "tumbleweed"
+assert_eq "$(cls alpine "" 3.22.1)" "alpine/supported" "alpine 3.22"; assert_eq "$(cls alpine "" 3.12.0)" "alpine/old" "alpine 3.12"
+assert_eq "$(cls endeavouros arch "")" "/unknown" "arch derivative is not safe with the official installer"
+assert_eq "$(cls gentoo "" "")" "/unknown" "gentoo"
+assert_true ver_ge 24.04 20.04; assert_false ver_ge 18.04 20.04; assert_true ver_ge "" 9; assert_true ver_ge 10 9
+assert_eq "$(plat_map_arch x86_64)" amd64; assert_eq "$(plat_map_arch aarch64)" arm64; assert_eq "$(plat_map_arch armv7l)" armv7
+assert_eq "$(plat_map_arch i686)" 386; assert_eq "$(plat_map_arch s390x)" s390x; assert_eq "$(plat_map_arch riscv64)" ""
+# package names per manager
+for pm in apt dnf yum pacman zypper apk; do PLAT_PM="${pm}"; assert_true test -n "$(pkg_names iproute)"; assert_true test -n "$(pkg_names procps)"; done
+PLAT_PM=apt; assert_eq "$(pkg_names iproute)" iproute2; assert_eq "$(pkg_names procps)" procps
+PLAT_PM=dnf; assert_eq "$(pkg_names iproute)" iproute; assert_eq "$(pkg_names procps)" procps-ng; assert_eq "$(pkg_names pysystemd)" python3-systemd
+PLAT_PM=pacman; assert_eq "$(pkg_names pysystemd)" python-systemd; PLAT_PM=apk; assert_eq "$(pkg_names iproute)" "iproute2 iproute2-ss"
+# package-manager failure hints
+hf="${T}/pkg.out"
+printf 'E: Could not get lock /var/lib/dpkg/lock-frontend\n' > "${hf}"; assert_true grep -q "Another package manager" <(pkg_hint "${hf}")
+printf 'Temporary failure resolving archive.ubuntu.com\n' > "${hf}"; assert_true grep -q "unreachable" <(pkg_hint "${hf}")
+printf 'No match for argument: fail2ban\n' > "${hf}"; assert_true grep -q "not available" <(pkg_hint "${hf}")
+printf 'dpkg was interrupted, you must manually run dpkg --configure -a\n' > "${hf}"; assert_true grep -q "dpkg --configure -a" <(pkg_hint "${hf}")
+printf 'write error: No space left on device\n' > "${hf}"; assert_true grep -q "disk is full" <(pkg_hint "${hf}")
+PLAT_PM=""
+PLAT_INIT="systemd"
+
+# firewalld: command syntax against a recording stub (a real firewalld needs a full system)
+mkdir -p "${T}/fwbin"
+cat > "${T}/fwbin/firewall-cmd" << 'FWEOF'
+#!/usr/bin/env bash
+echo "firewall-cmd $*" >> "${FWLOG}"
+case "$1" in
+  --state) echo running ;;
+  --get-default-zone) echo public ;;
+  --get-zone-of-interface=*) echo public ;;
+  --query-port=* | --zone=*--query-port=*) exit 1 ;;
+esac
+for a in "$@"; do case "${a}" in --query-port=*) exit 1 ;; esac; done
+exit 0
+FWEOF
+chmod +x "${T}/fwbin/firewall-cmd"
+FWLOG="${T}/fw.log"; export FWLOG; : > "${FWLOG}"
+OLDP="${PATH}"; PATH="${T}/fwbin:${PATH}"
+FW_BACKEND=firewalld; FW_ZONE=""
+assert_true fw_allow 22 tcp ssh; assert_true fw_allow 10000:10100 tcp extra
+assert_true grep -q "firewall-cmd --permanent --zone=public --add-port=22/tcp" "${FWLOG}"
+assert_true grep -q "firewall-cmd --zone=public --add-port=22/tcp" "${FWLOG}"
+assert_true grep -q "add-port=10000-10100/tcp" "${FWLOG}"
+assert_true grep -q "^firewalld_rule=public 22/tcp ssh" "$(state_file)"
+PATH="${OLDP}"; FW_BACKEND=""; FW_ZONE=""
 
 # panel HTTPS helpers
 assert_true _valid_domain vpn.example.com; assert_false _valid_domain "bad domain"; assert_false _valid_domain localhost; assert_false _valid_domain "a.b;rm"

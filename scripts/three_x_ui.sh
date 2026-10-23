@@ -70,12 +70,11 @@ _xui_setting_show() { "${XUI_FOLDER}/x-ui" setting -show true 2> /dev/null || tr
 xui_wait_active() {
   local i
   for ((i = 0; i < 45; i++)); do
-    systemctl is-active --quiet x-ui 2> /dev/null && return 0
+    svc_active x-ui && return 0
     sleep 1
   done
   log_error "Service x-ui did not become active. Status and journal were saved to the log."
-  run_logged systemctl status x-ui --no-pager -l || true
-  run_logged journalctl -u x-ui -n 40 --no-pager || true
+  svc_dump x-ui
   return 1
 }
 
@@ -174,9 +173,9 @@ xui_apply() {
   case "${XUI_ACTION}" in
     keep)
       log_ok "3x-ui is already installed; the official installer is NOT re-run (set MVN_FORCE_XUI_REINSTALL=1 to force it)"
-      if ! systemctl is-active --quiet x-ui 2> /dev/null; then
+      if ! svc_active x-ui; then
         log_warn "Service x-ui is not active; trying to start it"
-        run_logged systemctl start x-ui || true
+        run_logged svc_start x-ui || true
       fi
       ;;
     install | reinstall)

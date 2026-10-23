@@ -2,6 +2,10 @@
 # MVN Deploy — update MVN Deploy's OWN files to a chosen release.
 # It does not update 3x-ui/Xray (use 3x-ui's own mechanism) and never touches 3x-ui data.
 set -Eeuo pipefail
+# Predictable environment: English tool output (we parse it), complete PATH (su without "-"), sane umask.
+export LC_ALL=C LANG=C
+export PATH="${PATH:+${PATH}:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+umask 022
 SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 for _m in logger common; do
   # shellcheck source=/dev/null

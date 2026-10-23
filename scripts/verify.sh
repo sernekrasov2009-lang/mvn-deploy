@@ -16,8 +16,8 @@ verify_all() {
   local p
 
   # 3x-ui service
-  if systemctl is-active --quiet x-ui 2> /dev/null; then _v_ok "x-ui service is active"; else _v_fail "x-ui service is NOT active"; fi
-  if systemctl is-enabled --quiet x-ui 2> /dev/null; then _v_ok "x-ui starts on boot"; else _v_warn "x-ui is not enabled for boot"; fi
+  if svc_active x-ui; then _v_ok "x-ui service is active"; else _v_fail "x-ui service is NOT active"; fi
+  if svc_enabled x-ui; then _v_ok "x-ui starts on boot"; else _v_warn "x-ui is not enabled for boot"; fi
   [[ -x "${XUI_FOLDER}/x-ui" ]] && _v_ok "x-ui binary present" || _v_fail "x-ui binary not found in ${XUI_FOLDER}"
 
   # Panel port (local check only)
@@ -45,21 +45,24 @@ verify_all() {
 
   # Firewall
   case "${FW_ACTION}" in
-    skip) _v_warn "Local firewall was not managed by MVN Deploy; make sure SSH and the panel port are reachable" ;;
-    ufw-add | ufw-enable)
-      if ufw status 2> /dev/null | has_match -i '^Status: active'; then
-        _v_ok "UFW is active"
+    skip)
+      if ((FW_FAILED)); then _v_warn "The firewall could not be set up (see warnings above): open ports at your provider or configure a firewall yourself"
+      else _v_warn "Local firewall was not managed by MVN Deploy; make sure SSH and the panel port are reachable"; fi
+      ;;
+    add | enable)
+      if fw_is_active; then
+        _v_ok "${FW_BACKEND} is active"
         for p in "${FW_SSH_PORTS[@]}"; do
-          fw_status_allows "${p}" tcp && _v_ok "SSH ${p}/tcp is allowed" || _v_fail "SSH ${p}/tcp is NOT allowed in UFW"
+          fw_status_allows "${p}" tcp && _v_ok "SSH ${p}/tcp is allowed" || _v_fail "SSH ${p}/tcp is NOT allowed in ${FW_BACKEND}"
         done
         if [[ -n "${XUI_PANEL_PORT_VAL}" ]]; then
-          fw_status_allows "${XUI_PANEL_PORT_VAL}" tcp && _v_ok "Panel ${XUI_PANEL_PORT_VAL}/tcp is allowed" || _v_fail "Panel port ${XUI_PANEL_PORT_VAL}/tcp is NOT allowed in UFW"
+          fw_status_allows "${XUI_PANEL_PORT_VAL}" tcp && _v_ok "Panel ${XUI_PANEL_PORT_VAL}/tcp is allowed" || _v_fail "Panel port ${XUI_PANEL_PORT_VAL}/tcp is NOT allowed in ${FW_BACKEND}"
         fi
         for p in "${FW_TCP_EXTRA[@]}"; do fw_status_allows "${p}" tcp && _v_ok "${p}/tcp is allowed" || _v_fail "${p}/tcp is NOT allowed"; done
         for p in "${FW_UDP_EXTRA[@]}"; do fw_status_allows "${p}" udp && _v_ok "${p}/udp is allowed" || _v_fail "${p}/udp is NOT allowed"; done
-        systemctl is-enabled --quiet ufw 2> /dev/null && _v_ok "UFW starts on boot" || _v_warn "UFW service is not enabled for boot"
+        svc_enabled "${FW_BACKEND}" && _v_ok "${FW_BACKEND} starts on boot" || _v_warn "${FW_BACKEND} is not enabled for boot"
       else
-        _v_fail "UFW is not active"
+        _v_fail "${FW_BACKEND} is not active"
       fi
       ;;
   esac

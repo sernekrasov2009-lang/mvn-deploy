@@ -1,12 +1,12 @@
 # Установка
 
 ## Требования
-Root (`sudo`), Debian 12/13 или Ubuntu 22.04/24.04, amd64 или arm64, systemd, apt, доступ к GitHub,
+Root (`sudo`), одна из поддерживаемых систем ([COMPATIBILITY.md](COMPATIBILITY.md): Debian/Ubuntu, RHEL-семейство, Arch, openSUSE, Alpine), systemd или OpenRC, доступ к GitHub,
 ≥ 500 МБ свободного места, корректное время. Облачный firewall провайдера проверьте сами.
 
 ## Режимы
 - Интерактивный (по умолчанию): спрашивает только при неоднозначности (чужой firewall, неизвестный SSH-порт,
-  найденный конфликтующий сервис, доп. порты, необязательный `apt upgrade`).
+  найденный конфликтующий сервис, доп. порты, необязательное полное обновление пакетов).
 - Без вопросов: `-y` / `MVN_NONINTERACTIVE=1`, а также когда нет TTY. Опасная неоднозначность = **ошибка до изменений**.
 - `--dry-run`: только проверки и план.
 
@@ -23,7 +23,8 @@ Root (`sudo`), Debian 12/13 или Ubuntu 22.04/24.04, amd64 или arm64, syste
 | `MVN_XUI_SSL_MODE` / `MVN_XUI_DOMAIN` | `none` | `ip` / `domain` — сертификат Let's Encrypt силами установщика 3x-ui (откроется 80/tcp) |
 | `MVN_XUI_INSTALLER_SHA256` | — | закрепить sha256 официального `install.sh` |
 | `MVN_ALLOW_CONFLICTS=1` | 0 | продолжить при найденном xray/sing-box/marzban и т.п. |
-| `MVN_APT_UPGRADE=1` | 0 | полный `apt upgrade` |
+| `MVN_PKG_UPGRADE=1` | 0 | полное обновление пакетов (прежнее имя `MVN_APT_UPGRADE` тоже работает) |
+| `MVN_ALLOW_UNSUPPORTED_OS=1` | 0 | попробовать на системе вне списка (на свой риск) |
 | `MVN_FORCE_XUI_REINSTALL=1` | 0 | перезапустить установщик 3x-ui поверх существующей |
 | `MVN_SHA256` | — | контрольная сумма архива при bootstrap |
 
@@ -37,7 +38,7 @@ Root (`sudo`), Debian 12/13 или Ubuntu 22.04/24.04, amd64 или arm64, syste
 ## Повторный запуск, обновление, удаление
 - Повторный запуск не переустанавливает 3x-ui, не меняет пароль, не дублирует правила и sysctl-файл.
 - `sudo bash /opt/mvn-deploy/update.sh --ref vX.Y.Z` — обновляет только файлы MVN Deploy (с бэкапом и проверкой sha256). 3x-ui обновляется её штатными средствами.
-- `sudo bash /opt/mvn-deploy/uninstall.sh` — убирает только созданное MVN Deploy (BBR-файлы, не-SSH правила UFW); 3x-ui и её БД остаются.
+- `sudo bash /opt/mvn-deploy/uninstall.sh` — убирает только созданное MVN Deploy (BBR-файлы, не-SSH правила UFW/firewalld); 3x-ui и её БД остаются.
   `--backup-xui` делает бэкап `/etc/x-ui` и подсказывает `x-ui uninstall`.
 
 
@@ -58,7 +59,7 @@ Root (`sudo`), Debian 12/13 или Ubuntu 22.04/24.04, amd64 или arm64, syste
 Если Let's Encrypt не выдал сертификат, применяется `MVN_XUI_SSL_FALLBACK` (по умолчанию `selfsigned`).
 Уже установленную панель скрипт не перенастраивает: меняйте HTTPS через меню `x-ui`.
 
-Порт панели не может быть портом SSH, 80 или занятым другой программой. Порт 80 остаётся открытым в UFW только в режимах `ip` и `domain`
+Порт панели не может быть портом SSH, 80 или занятым другой программой. Порт 80 остаётся открытым в firewall только в режимах `ip` и `domain`
 (нужен для продления сертификата).
 
 ## Fail2ban

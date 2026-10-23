@@ -10,6 +10,10 @@
 #
 # shellcheck disable=SC2034  # MVN_* options set here are read by the sourced modules
 set -Eeuo pipefail
+# Predictable environment: English tool output (we parse it), complete PATH (su without "-"), sane umask.
+export LC_ALL=C LANG=C
+export PATH="${PATH:+${PATH}:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+umask 022
 
 MVN_REPO="sernekrasov2009-lang/mvn-deploy"
 # Release tags set this to their own tag (vX.Y.Z); during development it is "main".
@@ -43,7 +47,7 @@ Environment (also usable in /etc/mvn-deploy/mvn-deploy.conf): see docs/INSTALL.m
   MVN_BBR=auto|skip  MVN_XUI_VERSION  MVN_XUI_PANEL_PORT  MVN_XUI_DOMAIN
   MVN_XUI_SSL_MODE=auto|ip|domain|selfsigned|none  MVN_XUI_SSL_FALLBACK=selfsigned|none
   MVN_FAIL2BAN=auto|skip  MVN_F2B_MAXRETRY  MVN_F2B_FINDTIME  MVN_F2B_BANTIME  MVN_F2B_IGNORE_IPS
-  MVN_ALLOW_CONFLICTS=1  MVN_APT_UPGRADE=1  MVN_FORCE_XUI_REINSTALL=1
+  MVN_ALLOW_CONFLICTS=1  MVN_PKG_UPGRADE=1  MVN_FORCE_XUI_REINSTALL=1  MVN_ALLOW_UNSUPPORTED_OS=1
   MVN_SHA256 (release archive checksum)  MVN_ALLOW_DEV=1 (allow unverified branch)
 USAGE
 }
@@ -68,10 +72,23 @@ _b_ensure_downloader() {
   command -v curl > /dev/null 2>&1 && return 0
   command -v wget > /dev/null 2>&1 && return 0
   [[ "${EUID}" -eq 0 ]] || _b_die "curl or wget is required (and root to install it)"
-  command -v apt-get > /dev/null 2>&1 || _b_die "curl or wget is required"
   _b_say "Installing curl..."
-  DEBIAN_FRONTEND=noninteractive apt-get update -q > /dev/null
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -q ca-certificates curl > /dev/null
+  if command -v apt-get > /dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get update -q > /dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q ca-certificates curl > /dev/null
+  elif command -v dnf > /dev/null 2>&1; then
+    dnf install -y -q ca-certificates curl > /dev/null 2>&1 || dnf install -y -q --allowerasing ca-certificates curl > /dev/null
+  elif command -v yum > /dev/null 2>&1; then
+    yum install -y -q ca-certificates curl > /dev/null
+  elif command -v zypper > /dev/null 2>&1; then
+    zypper --non-interactive install --no-recommends ca-certificates curl > /dev/null
+  elif command -v pacman > /dev/null 2>&1; then
+    pacman -S --noconfirm --needed ca-certificates curl > /dev/null
+  elif command -v apk > /dev/null 2>&1; then
+    apk add --no-cache ca-certificates curl > /dev/null
+  else
+    _b_die "curl or wget is required and no known package manager was found"
+  fi
+  command -v curl > /dev/null 2>&1 || _b_die "Could not install curl; install curl or wget manually and run again"
 }
 
 _b_confirm() { # question
@@ -178,7 +195,7 @@ fi
 # ============================================================================
 # Main layer
 # ============================================================================
-for _m in logger common system dependencies security panel_tls three_x_ui firewall fail2ban bbr verify; do
+for _m in logger common platform system dependencies security panel_tls three_x_ui firewall fail2ban bbr verify; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
@@ -213,6 +230,7 @@ stage_preflight() {
   sys_check_disk
   sys_check_time
   sys_check_network
+  sys_check_resources
   log_ok "Preflight passed: ${OS_PRETTY}, ${ARCH}"
   report_add "Preflight" "OK" "${OS_PRETTY}, ${ARCH}"
 }
@@ -244,17 +262,17 @@ stage_plan() {
     fi
   fi
 
-  if ! is_noninteractive && [[ "${MVN_DRY_RUN}" != "1" && "${MVN_APT_UPGRADE}" != "1" ]]; then
-    ask_yes_no "Also run an optional full 'apt upgrade'?" n && MVN_APT_UPGRADE=1
+  if ! is_noninteractive && [[ "${MVN_DRY_RUN}" != "1" && "${MVN_PKG_UPGRADE}" != "1" ]]; then
+    ask_yes_no "Also run an optional full system package upgrade?" n && MVN_PKG_UPGRADE=1
   fi
 
   xui_plan
   fw_plan
   f2b_plan
 
-  plan_add "System: ${OS_PRETTY} (${ARCH})"
+  plan_add "System: ${OS_PRETTY} (${ARCH}); family ${PLAT_FAMILY:-?}, packages via ${PLAT_PM}, init ${PLAT_INIT}"
   deps_compute_missing
-  plan_add "Packages to install: ${DEPS_MISSING[*]:-none}$([[ ${MVN_APT_UPGRADE} == 1 ]] && echo ' + full apt upgrade')"
+  plan_add "Packages to install: ${DEPS_PKGS[*]:-none}${DEPS_OPTIONAL[*]:+; recommended: ${DEPS_OPTIONAL[*]}}$([[ ${MVN_PKG_UPGRADE} == 1 ]] && echo ' + full system upgrade')"
   case "${XUI_ACTION}" in
     install) plan_add "3x-ui: $(xui_plan_text)" ;;
     reinstall) plan_add "3x-ui: RE-run the official installer (forced); $(xui_plan_text)" ;;
@@ -275,10 +293,10 @@ stage_plan() {
   fi
 }
 
-stage_deps()     { deps_install; }
+stage_deps()     { deps_install; fw_prepare; }
 stage_security() { sec_prepare; }
 stage_xui() {
-  if [[ ( "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ) && "${FW_ACTION}" == "ufw-add" ]]; then
+  if [[ ( "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ) && "${FW_ACTION}" == "add" ]]; then
     fw_allow 80 tcp acme    # HTTP-01 challenge must pass while UFW is already active
   fi
   xui_apply

@@ -89,7 +89,7 @@ xui_ssl_preflight() {
     return 0
   fi
   if [[ "${XUI_SSL_EFFECTIVE}" == "domain" ]]; then
-    resolved="$(getent ahostsv4 "${MVN_XUI_DOMAIN}" 2> /dev/null | awk 'NR==1{print $1}' || true)"
+    resolved="$({ getent ahostsv4 "${MVN_XUI_DOMAIN}" 2> /dev/null || getent hosts "${MVN_XUI_DOMAIN}" 2> /dev/null; } | awk '$1 ~ /^[0-9.]+$/ {print $1; exit}' || true)"
     if [[ -z "${resolved}" ]]; then
       _ssl_degrade "${MVN_XUI_DOMAIN} does not resolve yet (create an A record pointing to ${XUI_PUBLIC_IP})"
     elif [[ "${resolved}" != "${XUI_PUBLIC_IP}" ]]; then
@@ -187,7 +187,7 @@ xui_make_selfsigned() {
   chmod 600 "${key}"; chmod 644 "${crt}"
   run_logged "${XUI_FOLDER}/x-ui" cert -webCert "${crt}" -webCertKey "${key}" \
     || { log_error "x-ui refused the certificate paths"; return 1; }
-  run_logged systemctl restart x-ui || true
+  run_logged svc_restart x-ui || true
   xui_wait_active || return 1
   state_set selfsigned_cert 1
   return 0

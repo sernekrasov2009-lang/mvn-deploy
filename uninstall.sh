@@ -2,8 +2,12 @@
 # MVN Deploy — conservative uninstall. Removes only what MVN Deploy itself created.
 # 3x-ui and its database are NEVER removed silently.
 set -Eeuo pipefail
+# Predictable environment: English tool output (we parse it), complete PATH (su without "-"), sane umask.
+export LC_ALL=C LANG=C
+export PATH="${PATH:+${PATH}:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+umask 022
 SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-for _m in logger common; do
+for _m in logger common platform; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
@@ -34,6 +38,7 @@ done
 
 [[ "${EUID}" -eq 0 ]] || { echo "Run as root: sudo bash uninstall.sh" >&2; exit 2; }
 detect_interactivity
+plat_detect_init
 log_init
 
 confirm() { ((YES)) && return 0; ask_yes_no "$1" n; }
@@ -41,7 +46,7 @@ confirm() { ((YES)) && return 0; ask_yes_no "$1" n; }
 main() {
   echo "MVN Deploy uninstall will:"
   echo "  - remove ${MVN_STATE_DIR}-tracked files: BBR sysctl/modules files created by MVN Deploy"
-  echo "  - delete UFW rules created by MVN Deploy EXCEPT SSH rules (removing them could lock you out)"
+  echo "  - delete UFW/firewalld rules created by MVN Deploy EXCEPT SSH rules (removing them could lock you out)"
   echo "  - remove the fail2ban jail file created by MVN Deploy (the fail2ban package stays installed)"
   echo "  - keep UFW enabled state, 3x-ui, its database, its certificate and Xray untouched"
   confirm "Proceed?" || { echo "Aborted."; exit 3; }
@@ -57,8 +62,27 @@ main() {
   local jail="/etc/fail2ban/jail.d/mvn-deploy.local"
   if [[ -f "${jail}" && -n "$(state_get f2b_jail)" ]]; then
     rm -f -- "${jail}"
-    if systemctl is-active --quiet fail2ban 2> /dev/null; then run_logged systemctl restart fail2ban || true; fi
+    if svc_active fail2ban; then run_logged svc_restart fail2ban || true; fi
     log_ok "Removed the fail2ban jail ${jail} (the fail2ban package was left installed)"
+  fi
+
+  if command -v firewall-cmd > /dev/null 2>&1; then
+    local zone
+    while read -r zone spec role; do
+      [[ -n "${spec}" ]] || continue
+      if [[ "${role}" == "ssh" ]]; then
+        log_info "Keeping SSH rule ${spec}"
+      else
+        if firewall-cmd --state > /dev/null 2>&1; then
+          run_logged firewall-cmd --permanent --zone="${zone}" --remove-port="${spec}" || true
+          run_logged firewall-cmd --zone="${zone}" --remove-port="${spec}" || true
+        else
+          run_logged firewall-offline-cmd --zone="${zone}" --remove-port="${spec}" || true
+        fi
+        log_ok "Removed firewalld rule ${spec} (${role}, zone ${zone})"
+        state_del firewalld_rule "${zone} ${spec} ${role}"
+      fi
+    done < <(state_list firewalld_rule)
   fi
 
   if command -v ufw > /dev/null 2>&1; then
