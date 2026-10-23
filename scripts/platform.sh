@@ -208,6 +208,24 @@ pkg_names() {
   esac
 }
 
+# pkg_for_tool <command>: the package that provides a basic tool on this distribution.
+pkg_for_tool() {
+  case "$1" in
+    awk) echo "gawk" ;;
+    sed) echo "sed" ;;
+    grep) echo "grep" ;;
+    getent)
+      case "${PLAT_PM}" in
+        apt) echo "libc-bin" ;;
+        dnf | yum) echo "glibc-common" ;;
+        zypper | pacman) echo "glibc" ;;
+        apk) echo "musl-utils" ;;
+      esac
+      ;;
+    *) echo "coreutils" ;;   # df install mktemp sha256sum stat timeout sort ...
+  esac
+}
+
 pkg_installed() { # real package name
   case "${PLAT_PM}" in
     apt) dpkg-query -W -f='${Status}' "$1" 2> /dev/null | grep -q 'install ok installed' ;;

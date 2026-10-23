@@ -66,7 +66,23 @@ sys_check_tools() {
     command -v "${t}" > /dev/null 2>&1 || missing+=("${t}")
   done
   if ((${#missing[@]})); then
-    die "${EXIT_PRECOND}" "Required commands are missing: ${missing[*]} (install coreutils/util-linux/glibc-bin or the busybox equivalents)"
+    local -a pk=()
+    local m p
+    for m in "${missing[@]}"; do
+      p="$(pkg_for_tool "${m}")"
+      array_contains "${p}" "${pk[@]}" || pk+=("${p}")
+    done
+    if [[ "${MVN_DRY_RUN:-0}" == "1" ]]; then
+      die "${EXIT_PRECOND}" "Basic commands are missing: ${missing[*]}. A real run installs them (${pk[*]}); a dry run changes nothing, so install them first and repeat."
+    fi
+    log_warn "Basic commands are missing (${missing[*]}): minimal image. Installing ${pk[*]}"
+    _pkg_refresh_cmd > /dev/null 2>&1 || true
+    pkg_install_safe "${pk[@]}" || die "${EXIT_PRECOND}" "Could not install ${pk[*]}. Install them manually and run again."
+    missing=()
+    for t in awk sed grep df getent install mktemp sha256sum stat timeout sort; do
+      command -v "${t}" > /dev/null 2>&1 || missing+=("${t}")
+    done
+    ((${#missing[@]} == 0)) || die "${EXIT_PRECOND}" "Required commands are still missing after installation: ${missing[*]}"
   fi
   case "${PLAT_INIT}" in
     systemd | openrc) ;;
