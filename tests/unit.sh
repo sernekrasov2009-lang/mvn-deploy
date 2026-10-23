@@ -5,7 +5,7 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/logger.sh"; source "${ROOT}/scripts/common.sh"
-for _m in platform panel_tls three_x_ui firewall fail2ban; do source "${ROOT}/scripts/${_m}.sh"; done; unset _m
+for _m in platform system panel_tls three_x_ui firewall fail2ban; do source "${ROOT}/scripts/${_m}.sh"; done; unset _m
 MVN_NONINTERACTIVE=1
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 PASS=0; FAIL=0
@@ -59,6 +59,10 @@ fi
 # safe directories (these get rm -rf'ed)
 assert_true safe_dir_ok /opt/mvn-deploy; assert_true safe_dir_ok /var/lib/mvn-deploy
 for bad in / /usr /opt /opt/foo /usr/local /opt/mvn-deploy/../etc relative/mvn-deploy "/opt/mvn deploy" ""; do assert_false safe_dir_ok "${bad}"; done
+
+# inode check must not fire on Btrfs (reports 0 total inodes)
+assert_false inodes_low 0 0; assert_false inodes_low "" ""; assert_false inodes_low 1000000 900000
+assert_true inodes_low 1000000 100; assert_false inodes_low 1000000 5000
 
 # distribution classification
 cls() { plat_classify "$@"; printf '%s/%s' "${PLAT_FAMILY}" "${PLAT_SUPPORT}"; }

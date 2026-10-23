@@ -97,14 +97,21 @@ sys_check_tools() {
   esac
 }
 
+# inodes_low <total> <free>: true only for filesystems with a fixed inode table that is nearly full.
+# Btrfs, XFS-with-dynamic-inodes and similar report 0 total inodes: that is "no limit", not "full".
+inodes_low() {
+  [[ "${1:-}" =~ ^[0-9]+$ && "${2:-}" =~ ^[0-9]+$ ]] || return 1
+  (($1 > 0 && $2 < 5000))
+}
+
 sys_check_disk() {
   local free
   free="$(df -Pm / | awk 'NR==2 {print $4}')"
   [[ "${free}" =~ ^[0-9]+$ ]] || die "${EXIT_PRECOND}" "Cannot determine free disk space"
   ((free >= MIN_FREE_MB)) || die "${EXIT_PRECOND}" "Not enough free disk space: ${free} MB (need ${MIN_FREE_MB} MB). Free some space (df -h, apt/dnf clean) and run again."
-  local ifree
-  ifree="$(df -Pi / 2> /dev/null | awk 'NR==2 {print $4}')"
-  if [[ "${ifree}" =~ ^[0-9]+$ ]] && ((ifree < 5000)); then
+  local itotal ifree
+  read -r itotal ifree < <(df -Pi / 2> /dev/null | awk 'NR==2 {print $2, $4}') || true
+  if inodes_low "${itotal:-}" "${ifree:-}"; then
     die "${EXIT_PRECOND}" "The filesystem is almost out of inodes (${ifree} left); installation would fail"
   fi
   local d
