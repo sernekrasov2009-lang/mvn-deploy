@@ -270,6 +270,9 @@ stage_plan() {
   fw_plan
   f2b_plan
 
+  if [[ "${IS_DESKTOP}" == "1" && "${MVN_DRY_RUN}" != "1" ]] && ! is_noninteractive; then
+    ask_yes_no "This looks like a desktop/laptop, not a server. Continue anyway?" n || die "${EXIT_ABORT}" "Aborted by user. Nothing was changed."
+  fi
   plan_add "System: ${OS_PRETTY} (${ARCH}); family ${PLAT_FAMILY:-?}, packages via ${PLAT_PM}, init ${PLAT_INIT}"
   deps_compute_missing
   plan_add "Packages to install: ${DEPS_PKGS[*]:-none}${DEPS_OPTIONAL[*]:+; recommended: ${DEPS_OPTIONAL[*]}}$([[ ${MVN_PKG_UPGRADE} == 1 ]] && echo ' + full system upgrade')"

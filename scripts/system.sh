@@ -159,6 +159,7 @@ sys_check_network() {
 
 # sys_check_resources: warnings only; small or containerised servers still work.
 VIRT_KIND=""
+IS_DESKTOP=0
 sys_check_resources() {
   local mem swap
   mem="$(awk '/^MemTotal:/ {print int($2/1024)}' /proc/meminfo 2> /dev/null || true)"
@@ -175,6 +176,12 @@ sys_check_resources() {
   if [[ -z "${VIRT_KIND}" && -d /proc/vz && ! -d /proc/bc ]]; then VIRT_KIND="openvz"; fi
   if [[ -n "${VIRT_KIND}" ]]; then
     log_warn "Running inside a container (${VIRT_KIND}): BBR and the firewall may be restricted by the host; failures there are reported as warnings"
+  fi
+  IS_DESKTOP=0
+  if [[ "${PLAT_INIT}" == "systemd" ]] && command -v systemctl > /dev/null 2>&1 \
+    && [[ "$(systemctl get-default 2> /dev/null || true)" == "graphical.target" ]]; then
+    IS_DESKTOP=1
+    log_warn "This machine boots into a graphical desktop. MVN Deploy is built for servers: a real run would install a public VPN panel and change firewall/sysctl settings here."
   fi
   return 0
 }
