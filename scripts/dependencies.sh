@@ -4,15 +4,17 @@
 # dependencies.sh — install only the system packages MVN Deploy needs, on any supported distribution.
 # Tools are detected by COMMAND, not by package name: that avoids conflicts such as curl vs curl-minimal.
 
-DEPS_MISSING=()       # logical names of REQUIRED tools that are missing
-DEPS_PKGS=()          # real package names for them
-DEPS_OPTIONAL=()      # recommended packages; failing to install them only produces warnings
+DEPS_MISSING=()  # logical names of REQUIRED tools that are missing
+DEPS_PKGS=()     # real package names for them
+DEPS_OPTIONAL=() # recommended packages; failing to install them only produces warnings
 
 _ca_ok() { [[ -s /etc/ssl/certs/ca-certificates.crt || -s /etc/pki/tls/certs/ca-bundle.crt || -s /etc/ssl/ca-bundle.pem || -s /etc/ssl/cert.pem ]]; }
 
 # deps_compute_missing: read-only.
 deps_compute_missing() {
-  DEPS_MISSING=(); DEPS_PKGS=(); DEPS_OPTIONAL=()
+  DEPS_MISSING=()
+  DEPS_PKGS=()
+  DEPS_OPTIONAL=()
   local l n
   local -a req=() opt=()
 
@@ -70,8 +72,8 @@ deps_install() {
 
   if ((${#DEPS_PKGS[@]})); then
     log_info "Installing required packages: ${DEPS_PKGS[*]}"
-    pkg_install_safe "${DEPS_PKGS[@]}" \
-      || die "${EXIT_FAIL}" "Failed to install required packages: ${DEPS_PKGS[*]} (see the hints above and ${LOG_FILE})"
+    pkg_install_safe "${DEPS_PKGS[@]}" ||
+      die "${EXIT_FAIL}" "Failed to install required packages: ${DEPS_PKGS[*]} (see the hints above and ${LOG_FILE})"
   fi
 
   # Recommended extras: never fatal. Firewall and fail2ban packages are handled by their own stages.

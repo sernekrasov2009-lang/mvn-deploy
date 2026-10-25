@@ -5,14 +5,21 @@
 VERIFY_FAILS=0
 VERIFY_WARNS=0
 
-_v_ok()   { log_ok "$1"; }
-_v_warn() { log_warn "$1"; VERIFY_WARNS=$((VERIFY_WARNS + 1)); }
-_v_fail() { log_error "$1"; VERIFY_FAILS=$((VERIFY_FAILS + 1)); }
+_v_ok() { log_ok "$1"; }
+_v_warn() {
+  log_warn "$1"
+  VERIFY_WARNS=$((VERIFY_WARNS + 1))
+}
+_v_fail() {
+  log_error "$1"
+  VERIFY_FAILS=$((VERIFY_FAILS + 1))
+}
 
 _perm() { stat -c '%a' "$1" 2> /dev/null || echo "?"; }
 
 verify_all() {
-  VERIFY_FAILS=0; VERIFY_WARNS=0
+  VERIFY_FAILS=0
+  VERIFY_WARNS=0
   local p
 
   # 3x-ui service
@@ -46,7 +53,8 @@ verify_all() {
   # Firewall
   case "${FW_ACTION}" in
     skip)
-      if ((FW_FAILED)); then _v_warn "The firewall could not be set up (see warnings above): open ports at your provider or configure a firewall yourself"
+      if ((FW_FAILED)); then
+        _v_warn "The firewall could not be set up (see warnings above): open ports at your provider or configure a firewall yourself"
       else _v_warn "Local firewall was not managed by MVN Deploy; make sure SSH and the panel port are reachable"; fi
       ;;
     add | enable)

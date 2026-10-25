@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install ShellCheck
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: Install ShellCheck and shfmt
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt
       - name: Lint + unit tests
         run: bash tests/lint.sh
 
@@ -125,6 +125,17 @@ jobs:
           sudo ufw status | grep -E "443/tcp +ALLOW"
           sudo fail2ban-client status sshd
           sysctl net.ipv4.tcp_congestion_control
+      - name: Doctor, status and backup/restore
+        run: |
+          mvn-deploy version
+          sudo mvn-deploy doctor
+          sudo mvn-deploy status
+          sudo mvn-deploy backup
+          f="$(sudo bash -c 'ls -1t /var/backups/mvn-deploy/mvn-backup-*.tar.gz | head -n 1')"
+          sudo test -n "${f}"
+          sudo mvn-deploy restore "${f}" -y
+          sudo systemctl is-active x-ui
+          sudo mvn-deploy doctor
       - name: Run again (must be idempotent)
         run: sudo env MVN_SSH_PORTS=22 bash install.sh -y --ssl selfsigned
       - name: Uninstall

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Уязвимость
+    url: https://github.com/sernekrasov2009-lang/mvn-deploy/security/advisories/new
+    about: Сообщите о проблеме безопасности закрыто, не в публичном issue.

@@ -6,7 +6,7 @@
 
 sec_prepare() {
   state_init
-  WORK_DIR="$(mktemp -d /tmp/mvn-deploy.XXXXXX)"   # mode 0700
+  WORK_DIR="$(mktemp -d /tmp/mvn-deploy.XXXXXX)" # mode 0700
 
   # Keep a persistent copy of the project so update.sh / uninstall.sh work later.
   require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
@@ -22,6 +22,14 @@ sec_prepare() {
     log_file_only "Project copy installed to ${MVN_INSTALL_DIR}"
   fi
   state_set version "${MVN_VERSION}"
+  # The "mvn-deploy" command (never "mvn": that is Apache Maven).
+  local link_dir="${MVN_LINK_DIR:-/usr/local/bin}"
+  if [[ -d "${link_dir}" && -w "${link_dir}" && -f "${MVN_INSTALL_DIR}/bin/mvn-deploy" ]]; then
+    chmod 755 -- "${MVN_INSTALL_DIR}/bin/mvn-deploy"
+    if ln -sfn -- "${MVN_INSTALL_DIR}/bin/mvn-deploy" "${link_dir}/mvn-deploy"; then
+      state_set cli_link "${link_dir}/mvn-deploy"
+    fi
+  fi
   log_ok "Working directories prepared (log and state are root-only)"
   report_add "Security prep" "OK" "root-only log/state, project copy in ${MVN_INSTALL_DIR}"
 }

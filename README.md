@@ -7,9 +7,10 @@
 [![CI](https://github.com/sernekrasov2009-lang/mvn-deploy/actions/workflows/ci.yml/badge.svg)](https://github.com/sernekrasov2009-lang/mvn-deploy/actions/workflows/ci.yml)
 ![Shell](https://img.shields.io/badge/shell-bash-4eaa25)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-0.1.0--dev-orange)
+[![Release](https://img.shields.io/github/v/release/sernekrasov2009-lang/mvn-deploy?include_prereleases&label=release)](https://github.com/sernekrasov2009-lang/mvn-deploy/releases)
+[![Stars](https://img.shields.io/github/stars/sernekrasov2009-lang/mvn-deploy?style=flat)](https://github.com/sernekrasov2009-lang/mvn-deploy/stargazers)
 
-[Установка](#установка) · [Совместимость](#совместимость) · [Параметры](#параметры) · [Как это работает](#как-это-работает) · [Безопасность](#безопасность) · [FAQ](#faq)
+[Установка](#установка) · [Команда mvn-deploy](#команда-mvn-deploy) · [Совместимость](#совместимость) · [Параметры](#параметры) · [Как это работает](#как-это-работает) · [Безопасность](#безопасность) · [FAQ](#faq)
 
 </div>
 
@@ -23,6 +24,11 @@ Inbound-ы и клиентов вы создаёте уже в веб-интер
 > (см. [Совместимость](#совместимость)). Остальные семейства дистрибутивов реализованы и проверяются
 > «сухим» прогоном, но ещё не прошли полную установку на живом сервере.
 
+<div align="center">
+<img src="docs/assets/dry-run.svg" alt="Вывод mvn-deploy --dry-run: план установки" width="880">
+<br><sub>Фрагмент настоящего вывода <code>--dry-run</code>: план изменений, сервер при этом не меняется.</sub>
+</div>
+
 ## Возможности
 
 | | |
@@ -35,6 +41,8 @@ Inbound-ы и клиентов вы создаёте уже в веб-интер
 | **BBR** | TCP BBR + fq только если его поддерживает ядро |
 | **Много дистрибутивов** | Debian, Ubuntu, AlmaLinux, Rocky, RHEL, Oracle, CentOS Stream, Fedora, Amazon Linux, Arch, openSUSE, Alpine |
 | **Устойчивость** | Повторы при сетевых сбоях, починка прерванного `dpkg`, понятные подсказки, откат firewall при проблемах |
+| **Команда `mvn-deploy`** | `doctor` (диагностика), `status`, `backup` / `restore`, `update`, `uninstall` |
+| **Конфиг одним файлом** | YAML (`config/example.yml`): одинаковые серверы без вопросов |
 | **Безопасно по умолчанию** | `--dry-run` ничего не меняет; повторный запуск идемпотентен; `uninstall.sh` удаляет только своё |
 
 ## Установка
@@ -69,6 +77,25 @@ sudo MVN_ALLOW_DEV=1 MVN_EXTRA_TCP_PORTS=443 bash /tmp/mvn-deploy-install.sh -y 
 
 После установки в конце выводится адрес панели; логин и пароль лежат в `/etc/x-ui/install-result.env` (только root).
 Дальше создайте inbound в панели и откройте его порт в firewall (`ufw allow <порт>/tcp` или `firewall-cmd --permanent --add-port=<порт>/tcp && firewall-cmd --reload`).
+
+## Команда mvn-deploy
+
+После установки доступна команда `mvn-deploy` (не `mvn`: это имя занято Apache Maven).
+
+| Команда | Что делает |
+|---|---|
+| `mvn-deploy doctor` | диагностика сервера только на чтение: система, сеть, служба и порт панели, срок сертификата, firewall, fail2ban, BBR, конфликты. Код выхода 1, если что-то сломано |
+| `mvn-deploy status` | короткая сводка: адрес панели, службы, firewall, последняя резервная копия |
+| `mvn-deploy backup` | архив базы панели, сертификатов и настроек (права 600, хранится 10 последних) |
+| `mvn-deploy restore ФАЙЛ` | восстановление; архив проверяется (только свои пути, без ссылок и `..`), перед заменой делается копия текущего состояния |
+| `mvn-deploy update` | обновить сам MVN Deploy; перед этим делается копия данных панели |
+| `mvn-deploy uninstall` | убрать только созданное MVN Deploy |
+
+Конфигурация одним файлом (без вопросов при установке): [docs/CONFIG.md](docs/CONFIG.md), пример `config/example.yml`:
+
+```bash
+sudo bash install.sh -y --config deploy.yml
+```
 
 ## Совместимость
 
@@ -170,10 +197,11 @@ sudo bash /opt/mvn-deploy/uninstall.sh --backup-xui # плюс резервна�
 
 ```
 install.sh  update.sh  uninstall.sh         точки входа
-config/defaults.conf                         значения по умолчанию
+bin/mvn-deploy                               команда mvn-deploy (doctor, backup, ...)
+config/     defaults.conf example.yml        значения по умолчанию и пример YAML
 scripts/    platform system dependencies security panel_tls three_x_ui
-            firewall fail2ban bbr verify logger common
-docs/       INSTALL COMPATIBILITY TROUBLESHOOTING SECURITY MIGRATION SPECIFICATION
+            firewall fail2ban bbr verify backup doctor cli logger common
+docs/       INSTALL CONFIG ARCHITECTURE COMPATIBILITY TROUBLESHOOTING SECURITY MIGRATION SPECIFICATION
 tests/      lint.sh unit.sh               tools/make-release.sh
 .github/workflows/ci.yml                     lint, dry-run на 16 образах, реальная установка на Ubuntu
 ```
@@ -181,10 +209,11 @@ tests/      lint.sh unit.sh               tools/make-release.sh
 ## Разработка
 
 ```bash
-bash tests/lint.sh                   # bash -n, ShellCheck, поиск секретов, unit-тесты
+bash tests/lint.sh                   # bash -n, ShellCheck, shfmt, поиск секретов, unit-тесты
 bash tools/make-release.sh v1.0.0    # dist/*.tar.gz + .sha256 для релиза
 ```
 
+Правила и шаблоны: [CONTRIBUTING.md](CONTRIBUTING.md), устройство проекта: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), безопасность: [SECURITY.md](SECURITY.md).
 Полную установку проверяйте на временном сервере. CI делает это автоматически на Ubuntu 22.04 и 24.04.
 
 ## Лицензия

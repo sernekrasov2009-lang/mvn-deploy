@@ -1,6 +1,13 @@
 # Changelog
 
 ## 0.1.0-dev
+- Новое: команда `mvn-deploy` (`doctor`, `status`, `backup`, `backups`, `restore`, `update`, `uninstall`, `install`). Имя не `mvn`, чтобы не затенять Apache Maven.
+- Новое: `mvn-deploy doctor`: диагностика только на чтение (система, сеть, служба и порт панели, HTTPS и срок сертификата, firewall, fail2ban, BBR, конфликты), код выхода 1 при сбоях.
+- Новое: резервные копии (`backup`/`restore`): база панели, сертификаты, настройки; права 600, ротация; восстановление проверяет архив (только свои пути, без ссылок и `..`) и сохраняет текущее состояние. `update.sh` делает копию данных панели перед обновлением.
+- Новое: конфигурация YAML (`config/example.yml`, `docs/CONFIG.md`): безопасный разбор подмножества YAML с белым списком ключей; `--config` с отсутствующим файлом теперь ошибка.
+- Новое: проверка форматирования shfmt в CI и `tests/lint.sh`; весь код отформатирован.
+- Документация: ARCHITECTURE, CONFIG, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, шаблоны issue и pull request, картинка с реальным выводом `--dry-run` в README.
+- Исправлено: ложная ошибка «out of inodes» на Btrfs/Fedora; предупреждение при запуске на настольной системе.
 - Новое: поддержка семейств Debian/Ubuntu, RHEL (Alma, Rocky, RHEL, Oracle, CentOS Stream, Fedora, Amazon Linux), Arch/Manjaro, openSUSE и Alpine. Слой `platform.sh`: определение дистрибутива, пакетный менеджер (apt/dnf/yum/pacman/zypper/apk), systemd и OpenRC.
 - Новое: firewalld как второй firewall-бэкенд (RHEL, SUSE); учитывается зона сетевого интерфейса; правила SSH создаются до включения.
 - Новое: fail2ban подбирает источник логов под дистрибутив (auth.log, /var/log/secure, журнал), на RHEL подключает EPEL; нехватка пакета не прерывает установку.

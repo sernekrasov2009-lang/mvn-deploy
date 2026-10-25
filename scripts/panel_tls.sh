@@ -10,14 +10,14 @@
 # silently leaves the panel on HTTP, so MVN Deploy checks the real result and, if needed,
 # switches to a self-signed certificate (MVN_XUI_SSL_FALLBACK) instead of leaving HTTP.
 
-XUI_SSL_EFFECTIVE="none"    # none | ip | domain | selfsigned | existing
+XUI_SSL_EFFECTIVE="none" # none | ip | domain | selfsigned | existing
 XUI_PUBLIC_IP=""
-XUI_SCHEME=""               # http | https | "" (panel did not answer locally)
+XUI_SCHEME="" # http | https | "" (panel did not answer locally)
 XUI_TLS_NOTE=""
 MVN_TLS_DIR="/etc/x-ui/mvn-ssl"
 
 _valid_domain() { [[ "${1:-}" =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$ ]]; }
-_valid_ipv4()   { [[ "${1:-}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && [[ ! "${1}" =~ (^|\.)(25[6-9]|2[6-9][0-9]|[3-9][0-9][0-9])(\.|$) ]]; }
+_valid_ipv4() { [[ "${1:-}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && [[ ! "${1}" =~ (^|\.)(25[6-9]|2[6-9][0-9]|[3-9][0-9][0-9])(\.|$) ]]; }
 
 # Private, loopback, link-local and CGNAT ranges cannot get a public certificate.
 _is_private_ipv4() {
@@ -31,7 +31,10 @@ _public_ipv4() {
   local u r
   for u in https://api4.ipify.org https://ipv4.icanhazip.com https://4.ident.me; do
     r="$(curl -fsS --max-time 4 "${u}" 2> /dev/null | tr -d '[:space:]' || true)"
-    if _valid_ipv4 "${r}"; then printf '%s' "${r}"; return 0; fi
+    if _valid_ipv4 "${r}"; then
+      printf '%s' "${r}"
+      return 0
+    fi
   done
   return 0
 }
@@ -117,7 +120,8 @@ xui_ask_options() {
       if xui_port_problem "${v}"; then
         log_warn "Port ${v}: ${XUI_PORT_PROBLEM}"
       else
-        MVN_XUI_PANEL_PORT="${v}"; break
+        MVN_XUI_PANEL_PORT="${v}"
+        break
       fi
     done
   fi
@@ -141,7 +145,10 @@ xui_ask_options() {
     while ((tries < 5)); do
       tries=$((tries + 1))
       v="$(ask_value 'Domain name (for example vpn.example.com)' '')"
-      if _valid_domain "${v}"; then MVN_XUI_DOMAIN="${v}"; break; fi
+      if _valid_domain "${v}"; then
+        MVN_XUI_DOMAIN="${v}"
+        break
+      fi
       log_warn "That does not look like a valid domain name"
     done
   fi
@@ -154,39 +161,58 @@ xui_port_problem() {
   local p="${1}" s sshx="${MVN_SSH_PORTS:-}"
   sshx="${sshx//,/ }"
   XUI_PORT_PROBLEM=""
-  if ! valid_port "${p}"; then XUI_PORT_PROBLEM="not a valid port (1-65535)"; return 0; fi
-  if [[ "${p}" == "80" ]]; then XUI_PORT_PROBLEM="port 80 is reserved for certificate issuing"; return 0; fi
+  if ! valid_port "${p}"; then
+    XUI_PORT_PROBLEM="not a valid port (1-65535)"
+    return 0
+  fi
+  if [[ "${p}" == "80" ]]; then
+    XUI_PORT_PROBLEM="port 80 is reserved for certificate issuing"
+    return 0
+  fi
   for s in "${SSH_PORTS_DETECTED[@]}" ${sshx}; do
-    if [[ "${s}" == "${p}" ]]; then XUI_PORT_PROBLEM="this is your SSH port"; return 0; fi
+    if [[ "${s}" == "${p}" ]]; then
+      XUI_PORT_PROBLEM="this is your SSH port"
+      return 0
+    fi
   done
   if command -v ss > /dev/null 2>&1 && [[ -n "$(ss -ltnH "sport = :${p}" 2> /dev/null)" ]]; then
-    XUI_PORT_PROBLEM="already in use by another program"; return 0
+    XUI_PORT_PROBLEM="already in use by another program"
+    return 0
   fi
   return 1
 }
 
 _xui_cert_path() {
-  "${XUI_FOLDER}/x-ui" setting -getCert true 2> /dev/null \
-    | sed -n 's/^[[:space:]]*cert:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]' || true
+  "${XUI_FOLDER}/x-ui" setting -getCert true 2> /dev/null |
+    sed -n 's/^[[:space:]]*cert:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]' || true
 }
 
 # xui_make_selfsigned: creates the key pair and registers it in the panel.
 xui_make_selfsigned() {
   local host san ip crt key
-  ip="${XUI_PUBLIC_IP:-}"; [[ -n "${ip}" ]] || ip="$(_local_src_ipv4)"
+  ip="${XUI_PUBLIC_IP:-}"
+  [[ -n "${ip}" ]] || ip="$(_local_src_ipv4)"
   host="${MVN_XUI_DOMAIN:-${ip}}"
   [[ -n "${host}" ]] || host="localhost"
   if _valid_ipv4 "${host}"; then san="IP:${host}"; else san="DNS:${host}"; fi
   if [[ -n "${ip}" && "${host}" != "${ip}" ]]; then san="${san},IP:${ip}"; fi
-  crt="${MVN_TLS_DIR}/cert.pem"; key="${MVN_TLS_DIR}/key.pem"
+  crt="${MVN_TLS_DIR}/cert.pem"
+  key="${MVN_TLS_DIR}/key.pem"
 
   install -d -m 700 "${MVN_TLS_DIR}"
   run_logged openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
-    -keyout "${key}" -out "${crt}" -days 3650 -subj "/CN=${host}" -addext "subjectAltName=${san}" \
-    || { log_error "openssl could not create the self-signed certificate"; return 1; }
-  chmod 600 "${key}"; chmod 644 "${crt}"
-  run_logged "${XUI_FOLDER}/x-ui" cert -webCert "${crt}" -webCertKey "${key}" \
-    || { log_error "x-ui refused the certificate paths"; return 1; }
+    -keyout "${key}" -out "${crt}" -days 3650 -subj "/CN=${host}" -addext "subjectAltName=${san}" ||
+    {
+      log_error "openssl could not create the self-signed certificate"
+      return 1
+    }
+  chmod 600 "${key}"
+  chmod 644 "${crt}"
+  run_logged "${XUI_FOLDER}/x-ui" cert -webCert "${crt}" -webCertKey "${key}" ||
+    {
+      log_error "x-ui refused the certificate paths"
+      return 1
+    }
   run_logged svc_restart x-ui || true
   xui_wait_active || return 1
   state_set selfsigned_cert 1
@@ -199,9 +225,15 @@ xui_probe_scheme() {
   XUI_SCHEME=""
   for ((i = 0; i < tries; i++)); do
     code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 4 "https://127.0.0.1:${port}/${path}" 2> /dev/null || true)"
-    if [[ "${code}" =~ ^[1-5][0-9][0-9]$ ]]; then XUI_SCHEME="https"; return 0; fi
+    if [[ "${code}" =~ ^[1-5][0-9][0-9]$ ]]; then
+      XUI_SCHEME="https"
+      return 0
+    fi
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 "http://127.0.0.1:${port}/${path}" 2> /dev/null || true)"
-    if [[ "${code}" =~ ^[1-5][0-9][0-9]$ ]]; then XUI_SCHEME="http"; return 0; fi
+    if [[ "${code}" =~ ^[1-5][0-9][0-9]$ ]]; then
+      XUI_SCHEME="http"
+      return 0
+    fi
     sleep 1
   done
   return 1

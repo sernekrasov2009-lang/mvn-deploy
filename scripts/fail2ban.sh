@@ -4,7 +4,7 @@
 # fail2ban.sh — bans IPs that guess SSH passwords. One drop-in file, easy to remove.
 # An existing user-written [sshd] jail is never overridden.
 
-F2B_ACTION="skip"           # skip | install | keep
+F2B_ACTION="skip" # skip | install | keep
 F2B_JAIL_FILE="/etc/fail2ban/jail.d/mvn-deploy.local"
 F2B_PORTS=()
 F2B_BACKEND="auto"
@@ -22,12 +22,15 @@ _f2b_user_sshd_jail() { # does a hand-written config already define [sshd]?
 f2b_plan() {
   F2B_ACTION="skip"
   case "${MVN_FAIL2BAN:-auto}" in
-    skip) log_info "Fail2ban disabled (MVN_FAIL2BAN=skip)"; return 0 ;;
+    skip)
+      log_info "Fail2ban disabled (MVN_FAIL2BAN=skip)"
+      return 0
+      ;;
     auto) ;;
     *) die "${EXIT_PRECOND}" "MVN_FAIL2BAN must be auto or skip" ;;
   esac
-  [[ "${MVN_F2B_MAXRETRY}" =~ ^[0-9]{1,3}$ ]] && ((10#${MVN_F2B_MAXRETRY} >= 1)) \
-    || die "${EXIT_PRECOND}" "MVN_F2B_MAXRETRY must be a number >= 1"
+  [[ "${MVN_F2B_MAXRETRY}" =~ ^[0-9]{1,3}$ ]] && ((10#${MVN_F2B_MAXRETRY} >= 1)) ||
+    die "${EXIT_PRECOND}" "MVN_F2B_MAXRETRY must be a number >= 1"
   [[ "${MVN_F2B_FINDTIME}" =~ ^[0-9]+[smhdw]?$ ]] || die "${EXIT_PRECOND}" "MVN_F2B_FINDTIME must look like 10m"
   [[ "${MVN_F2B_BANTIME}" =~ ^[0-9]+[smhdw]?$ ]] || die "${EXIT_PRECOND}" "MVN_F2B_BANTIME must look like 1h"
   local t
@@ -50,7 +53,10 @@ f2b_plan() {
 f2b_plan_text() {
   case "${F2B_ACTION}" in
     install) printf 'install fail2ban; sshd jail on port(s) %s (%s failures in %s -> ban %s; your current SSH address is never banned)' \
-      "$(IFS=,; echo "${F2B_PORTS[*]}")" "${MVN_F2B_MAXRETRY}" "${MVN_F2B_FINDTIME}" "${MVN_F2B_BANTIME}" ;;
+      "$(
+        IFS=,
+        echo "${F2B_PORTS[*]}"
+      )" "${MVN_F2B_MAXRETRY}" "${MVN_F2B_FINDTIME}" "${MVN_F2B_BANTIME}" ;;
     keep) printf 'fail2ban already has your own [sshd] jail: leave it unchanged' ;;
     *) printf 'skipped' ;;
   esac
@@ -59,7 +65,10 @@ f2b_plan_text() {
 f2b_render() { # backend ignore-list [logpath] -> jail file content on stdout
   local backend="$1" ignore="$2" logpath="${3:-}"
   printf '# Managed by MVN Deploy. Safe to delete; uninstall.sh removes it.\n'
-  printf '[sshd]\nenabled = true\nport = %s\nbackend = %s\n' "$(IFS=,; echo "${F2B_PORTS[*]}")" "${backend}"
+  printf '[sshd]\nenabled = true\nport = %s\nbackend = %s\n' "$(
+    IFS=,
+    echo "${F2B_PORTS[*]}"
+  )" "${backend}"
   if [[ -n "${logpath}" ]]; then printf 'logpath = %s\n' "${logpath}"; fi
   printf 'maxretry = %s\nfindtime = %s\nbantime = %s\nignoreip = %s\n' \
     "${MVN_F2B_MAXRETRY}" "${MVN_F2B_FINDTIME}" "${MVN_F2B_BANTIME}" "${ignore}"
@@ -121,7 +130,10 @@ _f2b_install() {
 
 f2b_apply() {
   case "${F2B_ACTION}" in
-    skip) report_add "Fail2ban" "SKIPPED" "not requested"; return 0 ;;
+    skip)
+      report_add "Fail2ban" "SKIPPED" "not requested"
+      return 0
+      ;;
   esac
   if [[ "${F2B_ACTION}" == "install" ]] && ! _f2b_install; then
     log_warn "fail2ban could not be installed on ${OS_PRETTY}: SSH brute-force protection was not set up (everything else is unaffected)"
@@ -145,8 +157,12 @@ f2b_apply() {
   F2B_IGNORE="$(_f2b_ignore_list)"
   local cand be lp started=0
   while IFS= read -r cand; do
-    be="${cand%%|*}"; lp="${cand#*|}"
-    if _f2b_write_and_start "${be}" "${lp}"; then started=1; break; fi
+    be="${cand%%|*}"
+    lp="${cand#*|}"
+    if _f2b_write_and_start "${be}" "${lp}"; then
+      started=1
+      break
+    fi
     log_file_only "fail2ban did not start with backend=${be} logpath=${lp:-none}; trying the next option"
   done < <(_f2b_candidates)
 

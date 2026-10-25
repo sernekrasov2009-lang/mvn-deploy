@@ -1,0 +1,27 @@
+name: Ошибка
+description: Установка, обновление или удаление работает неправильно
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло
+      description: Что вы запускали (команда целиком) и что увидели.
+    validations: {required: true}
+  - type: input
+    id: os
+    attributes:
+      label: Система
+      description: Вывод `grep PRETTY_NAME /etc/os-release` и `uname -m`; VPS это или физическая машина.
+    validations: {required: true}
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Вывод `mvn-deploy doctor` и `--dry-run`
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Фрагмент журнала `/var/log/mvn-deploy/install.log`
+      description: Пароли маскируются, но просмотрите текст и замажьте IP и домены.
+      render: text

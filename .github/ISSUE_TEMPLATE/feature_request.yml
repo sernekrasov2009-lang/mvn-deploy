@@ -1,0 +1,13 @@
+name: Предложение
+description: Идея новой возможности
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Что вы хотите получить и для какой задачи
+    validations: {required: true}
+  - type: textarea
+    id: alt
+    attributes:
+      label: Как вы решаете это сейчас

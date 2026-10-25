@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034  # BACKUP_ONLINE is read by the sourced backup module
+# mvn-deploy — command-line entry point (installed to /usr/local/bin/mvn-deploy).
+# NOTE: the command is deliberately NOT called "mvn": that name belongs to Apache Maven.
+set -Eeuo pipefail
+export LC_ALL=C LANG=C
+export PATH="${PATH:+${PATH}:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+umask 022
+
+SELF="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(dirname -- "$(dirname -- "${SELF}")")"
+
+usage() {
+  cat << 'USAGE'
+Usage: mvn-deploy <command> [options]
+
+  install [opts]      install (same options as install.sh; add --dry-run to preview)
+  update [opts]       update MVN Deploy itself (3x-ui and its data are not touched)
+  uninstall [opts]    remove only what MVN Deploy created
+  doctor              diagnose the server (read-only); exit code 1 if something is broken
+  status              short overview: panel address, services, firewall, last backup
+  backup [--online]   archive the panel database, certificates and settings
+  backups             list existing backups
+  restore <file> [-y] restore a backup made by `mvn-deploy backup`
+  version             print the version
+  help                this text
+USAGE
+}
+
+need_root() {
+  if [[ "${EUID}" -ne 0 ]]; then
+    if command -v sudo > /dev/null 2>&1; then exec sudo -E -- "${SELF}" "$@"; fi
+    echo "mvn-deploy: this command needs root (sudo is not installed)" >&2
+    exit 2
+  fi
+}
+
+load_cli() {
+  local m
+  for m in logger common platform system panel_tls three_x_ui firewall fail2ban backup doctor cli; do
+    # shellcheck source=/dev/null
+    source "${ROOT}/scripts/${m}.sh"
+  done
+  cli_init
+}
+
+cmd="${1:-help}"
+[[ $# -gt 0 ]] && shift
+case "${cmd}" in
+  install) exec bash "${ROOT}/install.sh" "$@" ;;
+  update) exec bash "${ROOT}/update.sh" "$@" ;;
+  uninstall) exec bash "${ROOT}/uninstall.sh" "$@" ;;
+  doctor)
+    need_root "${cmd}" "$@"
+    load_cli
+    doctor_run
+    ;;
+  status)
+    need_root "${cmd}" "$@"
+    load_cli
+    status_run
+    ;;
+  backup)
+    need_root "${cmd}" "$@"
+    load_cli
+    if [[ "${1:-}" == "--online" ]]; then BACKUP_ONLINE=1; fi
+    backup_create > /dev/null
+    ;;
+  backups)
+    need_root "${cmd}" "$@"
+    load_cli
+    backup_list
+    ;;
+  restore)
+    need_root "${cmd}" "$@"
+    load_cli
+    [[ -n "${1:-}" ]] || {
+      echo "Usage: mvn-deploy restore <backup.tar.gz> [-y]" >&2
+      exit 2
+    }
+    backup_restore "$1" "$([[ "${2:-}" == "-y" || "${2:-}" == "--yes" ]] && echo 1 || echo 0)"
+    ;;
+  version | --version | -v)
+    # shellcheck source=/dev/null
+    source "${ROOT}/config/defaults.conf"
+    echo "mvn-deploy ${MVN_VERSION}"
+    ;;
+  help | --help | -h) usage ;;
+  *)
+    echo "mvn-deploy: unknown command '${cmd}'" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

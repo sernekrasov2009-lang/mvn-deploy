@@ -23,8 +23,15 @@ MVN_PINNED_REF="main"
 # Bootstrap layer — self-contained: must work when install.sh is a single file.
 # ============================================================================
 _b_say() { printf '[mvn-deploy] %s\n' "$*"; }
-_b_die() { printf '[mvn-deploy] ERROR: %s\n' "$*" >&2; exit 2; }
-_b_has_match() { local o; o="$(grep "$@" || true)"; [[ -n "${o}" ]]; }
+_b_die() {
+  printf '[mvn-deploy] ERROR: %s\n' "$*" >&2
+  exit 2
+}
+_b_has_match() {
+  local o
+  o="$(grep "$@" || true)"
+  [[ -n "${o}" ]]
+}
 
 usage() {
   cat << 'USAGE'
@@ -92,7 +99,7 @@ _b_ensure_downloader() {
 }
 
 _b_confirm() { # question
-  ( : < /dev/tty ) 2> /dev/null || return 1
+  (: < /dev/tty) 2> /dev/null || return 1
   local a=""
   read -r -p "$1 [y/N] " a < /dev/tty || return 1
   [[ "${a}" =~ ^[Yy]([Ee][Ss])?$ ]]
@@ -110,13 +117,22 @@ _b_fetch_project() {
     mode="release"
     url="https://github.com/${MVN_REPO}/releases/download/${ref}/mvn-deploy-${ref}.tar.gz"
     _b_say "Downloading release ${ref}..."
-    _b_http_get "${url}" "${archive}" || { rm -rf "${tmp}"; _b_die "Cannot download ${url}"; }
+    _b_http_get "${url}" "${archive}" || {
+      rm -rf "${tmp}"
+      _b_die "Cannot download ${url}"
+    }
     expected="${MVN_SHA256:-}"
     if [[ -z "${expected}" ]]; then
-      _b_http_get "${url}.sha256" "${tmp}/sum" || { rm -rf "${tmp}"; _b_die "Cannot download checksum ${url}.sha256"; }
+      _b_http_get "${url}.sha256" "${tmp}/sum" || {
+        rm -rf "${tmp}"
+        _b_die "Cannot download checksum ${url}.sha256"
+      }
       expected="$(awk '{print $1; exit}' "${tmp}/sum")"
     fi
-    [[ "${expected}" =~ ^[0-9a-f]{64}$ ]] || { rm -rf "${tmp}"; _b_die "Checksum is missing or malformed"; }
+    [[ "${expected}" =~ ^[0-9a-f]{64}$ ]] || {
+      rm -rf "${tmp}"
+      _b_die "Checksum is missing or malformed"
+    }
   else
     mode="dev"
     if [[ "${MVN_ALLOW_DEV:-0}" != "1" ]]; then
@@ -125,7 +141,10 @@ _b_fetch_project() {
     fi
     url="https://github.com/${MVN_REPO}/archive/refs/heads/${ref}.tar.gz"
     _b_say "Downloading branch ${ref} (UNVERIFIED)..."
-    _b_http_get "${url}" "${archive}" || { rm -rf "${tmp}"; _b_die "Cannot download ${url}"; }
+    _b_http_get "${url}" "${archive}" || {
+      rm -rf "${tmp}"
+      _b_die "Cannot download ${url}"
+    }
     expected="${MVN_SHA256:-}"
   fi
 
@@ -141,13 +160,17 @@ _b_fetch_project() {
   fi
 
   if tar -tzf "${archive}" 2> /dev/null | _b_has_match -E '(^/|(^|/)\.\.(/|$))'; then
-    rm -rf "${tmp}"; _b_die "Archive contains unsafe paths; refusing to extract."
+    rm -rf "${tmp}"
+    _b_die "Archive contains unsafe paths; refusing to extract."
   fi
   mkdir -p -- "${dest}"
-  tar -xzf "${archive}" -C "${dest}" --strip-components=1 || { rm -rf "${tmp}"; _b_die "Extraction failed (incomplete download?)"; }
+  tar -xzf "${archive}" -C "${dest}" --strip-components=1 || {
+    rm -rf "${tmp}"
+    _b_die "Extraction failed (incomplete download?)"
+  }
   rm -rf "${tmp}"
-  [[ -f "${dest}/install.sh" && -f "${dest}/scripts/logger.sh" && -f "${dest}/config/defaults.conf" ]] \
-    || _b_die "Downloaded project is incomplete"
+  [[ -f "${dest}/install.sh" && -f "${dest}/scripts/logger.sh" && -f "${dest}/config/defaults.conf" ]] ||
+    _b_die "Downloaded project is incomplete"
 }
 
 # ---------- argument parsing ----------
@@ -155,15 +178,42 @@ MVN_REF="${MVN_REF:-}"
 FETCH_ONLY_DEST=""
 while (($#)); do
   case "$1" in
-    -h | --help) usage; exit 0 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
     -y | --yes | --non-interactive) MVN_NONINTERACTIVE=1 ;;
     --dry-run | --plan) MVN_DRY_RUN=1 ;;
-    --ref) [[ $# -ge 2 ]] || _b_die "--ref needs a value"; MVN_REF="$2"; shift ;;
-    --panel-port) [[ $# -ge 2 ]] || _b_die "--panel-port needs a value"; MVN_XUI_PANEL_PORT="$2"; shift ;;
-    --ssl) [[ $# -ge 2 ]] || _b_die "--ssl needs a value"; MVN_XUI_SSL_MODE="$2"; shift ;;
-    --domain) [[ $# -ge 2 ]] || _b_die "--domain needs a value"; MVN_XUI_DOMAIN="$2"; shift ;;
-    --config) [[ $# -ge 2 ]] || _b_die "--config needs a value"; MVN_CONFIG_FILE="$2"; shift ;;
-    --fetch-only) [[ $# -ge 2 ]] || _b_die "--fetch-only needs a directory"; FETCH_ONLY_DEST="$2"; shift ;;
+    --ref)
+      [[ $# -ge 2 ]] || _b_die "--ref needs a value"
+      MVN_REF="$2"
+      shift
+      ;;
+    --panel-port)
+      [[ $# -ge 2 ]] || _b_die "--panel-port needs a value"
+      MVN_XUI_PANEL_PORT="$2"
+      shift
+      ;;
+    --ssl)
+      [[ $# -ge 2 ]] || _b_die "--ssl needs a value"
+      MVN_XUI_SSL_MODE="$2"
+      shift
+      ;;
+    --domain)
+      [[ $# -ge 2 ]] || _b_die "--domain needs a value"
+      MVN_XUI_DOMAIN="$2"
+      shift
+      ;;
+    --config)
+      [[ $# -ge 2 ]] || _b_die "--config needs a value"
+      MVN_CONFIG_FILE="$2"
+      shift
+      ;;
+    --fetch-only)
+      [[ $# -ge 2 ]] || _b_die "--fetch-only needs a directory"
+      FETCH_ONLY_DEST="$2"
+      shift
+      ;;
     *) _b_die "Unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -185,7 +235,7 @@ else
   boot_dir="$(mktemp -d /tmp/mvn-deploy-src.XXXXXX)"
   _b_fetch_project "${MVN_REF}" "${boot_dir}/project"
   child_in=/dev/null
-  if ( : < /dev/tty ) 2> /dev/null; then child_in=/dev/tty; fi
+  if (: < /dev/tty) 2> /dev/null; then child_in=/dev/tty; fi
   rc=0
   bash "${boot_dir}/project/install.sh" "$@" < "${child_in}" || rc=$?
   rm -rf "${boot_dir}"
@@ -204,9 +254,9 @@ unset _m
 sys_require_root
 sys_check_bash
 detect_interactivity
-load_user_config                                  # environment wins over the file
+load_user_config # environment wins over the file
 # shellcheck source=config/defaults.conf
-source "${SELF_DIR}/config/defaults.conf"         # defaults only fill what is still unset
+source "${SELF_DIR}/config/defaults.conf" # defaults only fill what is still unset
 require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
 require_safe_dir MVN_STATE_DIR "${MVN_STATE_DIR}"
 detect_interactivity
@@ -217,7 +267,11 @@ trap 'cleanup_work_dir' EXIT
 trap 'rc=$?; trap - ERR; log_error "Stage failed: ${CURRENT_STAGE} (line ${LINENO}, exit ${rc}). Details: ${LOG_FILE:-n/a}"; exit "${rc}"' ERR
 trap 'log_error "Interrupted during stage: ${CURRENT_STAGE}"; exit 130' INT TERM
 
-run_stage() { CURRENT_STAGE="$1"; log_step "$1"; "$2"; }
+run_stage() {
+  CURRENT_STAGE="$1"
+  log_step "$1"
+  "$2"
+}
 
 PLAN_LINES=()
 plan_add() { PLAN_LINES+=("$1"); }
@@ -257,8 +311,8 @@ stage_plan() {
     if [[ "${MVN_ALLOW_CONFLICTS}" == "1" ]]; then
       log_warn "Continuing because MVN_ALLOW_CONFLICTS=1"
     else
-      need_confirm "Continue although a conflicting service may exist?" "Set MVN_ALLOW_CONFLICTS=1 to proceed." \
-        || die "${EXIT_ABORT}" "Aborted: conflicting service detected. Nothing was changed."
+      need_confirm "Continue although a conflicting service may exist?" "Set MVN_ALLOW_CONFLICTS=1 to proceed." ||
+        die "${EXIT_ABORT}" "Aborted: conflicting service detected. Nothing was changed."
     fi
   fi
 
@@ -288,7 +342,10 @@ stage_plan() {
 
   log_info "Planned changes:"
   local l
-  for l in "${PLAN_LINES[@]}"; do printf '  - %s\n' "${l}"; log_file_only "PLAN: ${l}"; done
+  for l in "${PLAN_LINES[@]}"; do
+    printf '  - %s\n' "${l}"
+    log_file_only "PLAN: ${l}"
+  done
 
   if [[ "${MVN_DRY_RUN}" == "1" ]]; then
     log_ok "Dry run finished: no changes were made."
@@ -296,18 +353,21 @@ stage_plan() {
   fi
 }
 
-stage_deps()     { deps_install; fw_prepare; }
+stage_deps() {
+  deps_install
+  fw_prepare
+}
 stage_security() { sec_prepare; }
 stage_xui() {
-  if [[ ( "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ) && "${FW_ACTION}" == "add" ]]; then
-    fw_allow 80 tcp acme    # HTTP-01 challenge must pass while UFW is already active
+  if [[ ("${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain") && "${FW_ACTION}" == "add" ]]; then
+    fw_allow 80 tcp acme # HTTP-01 challenge must pass while UFW is already active
   fi
   xui_apply
 }
 stage_firewall() { fw_apply; }
 stage_fail2ban() { f2b_apply; }
-stage_bbr()      { bbr_apply; }
-stage_verify()   { verify_all; }
+stage_bbr() { bbr_apply; }
+stage_verify() { verify_all; }
 
 stage_report() {
   state_set last_run "$(date +%Y-%m-%dT%H:%M:%S%z)"
@@ -354,7 +414,7 @@ main() {
   run_stage "9. BBR" stage_bbr
   run_stage "10. Verification" stage_verify
   CURRENT_STAGE="11. Final report"
-  stage_report || exit 1   # non-zero when verification found failures; not a crash
+  stage_report || exit 1 # non-zero when verification found failures; not a crash
 }
 
 main

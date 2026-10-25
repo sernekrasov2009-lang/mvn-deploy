@@ -11,7 +11,7 @@ for _m in logger common platform; do
   # shellcheck source=/dev/null
   source "${SELF_DIR}/scripts/${_m}.sh"
 done
-load_user_config                                  # same precedence as install.sh: environment > config file > defaults
+load_user_config # same precedence as install.sh: environment > config file > defaults
 # shellcheck source=config/defaults.conf
 source "${SELF_DIR}/config/defaults.conf"
 require_safe_dir MVN_INSTALL_DIR "${MVN_INSTALL_DIR}"
@@ -31,17 +31,27 @@ Usage: sudo bash uninstall.sh [--yes] [--backup-xui]
   --backup-xui  additionally back up the 3x-ui data (/etc/x-ui) and show how to remove
                 3x-ui with its own tool. It does NOT uninstall 3x-ui by itself.
 USAGE
-      exit 0 ;;
-    *) echo "Unknown option: ${a}" >&2; exit 2 ;;
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: ${a}" >&2
+      exit 2
+      ;;
   esac
 done
 
-[[ "${EUID}" -eq 0 ]] || { echo "Run as root: sudo bash uninstall.sh" >&2; exit 2; }
+[[ "${EUID}" -eq 0 ]] || {
+  echo "Run as root: sudo bash uninstall.sh" >&2
+  exit 2
+}
 detect_interactivity
 plat_detect_init
 log_init
 
-confirm() { ((YES)) && return 0; ask_yes_no "$1" n; }
+confirm() {
+  ((YES)) && return 0
+  ask_yes_no "$1" n
+}
 
 main() {
   echo "MVN Deploy uninstall will:"
@@ -49,15 +59,28 @@ main() {
   echo "  - delete UFW/firewalld rules created by MVN Deploy EXCEPT SSH rules (removing them could lock you out)"
   echo "  - remove the fail2ban jail file created by MVN Deploy (the fail2ban package stays installed)"
   echo "  - keep UFW enabled state, 3x-ui, its database, its certificate and Xray untouched"
-  confirm "Proceed?" || { echo "Aborted."; exit 3; }
+  confirm "Proceed?" || {
+    echo "Aborted."
+    exit 3
+  }
 
   local f spec role
   for key in bbr_file bbr_modules_file; do
     f="$(state_get "${key}")"
-    if [[ -n "${f}" && -f "${f}" ]]; then rm -f -- "${f}"; log_ok "Removed ${f}"; fi
+    if [[ -n "${f}" && -f "${f}" ]]; then
+      rm -f -- "${f}"
+      log_ok "Removed ${f}"
+    fi
   done
   if command -v sysctl > /dev/null 2>&1; then run_logged sysctl --system || true; fi
   log_info "Live BBR setting stays until the next reboot; nothing else was reverted."
+
+  local cli
+  cli="$(state_get cli_link)"
+  if [[ -n "${cli}" && -L "${cli}" && "$(readlink -- "${cli}")" == "${MVN_INSTALL_DIR}/bin/mvn-deploy" ]]; then
+    rm -f -- "${cli}"
+    log_ok "Removed the command ${cli}"
+  fi
 
   local jail="/etc/fail2ban/jail.d/mvn-deploy.local"
   if [[ -f "${jail}" && -n "$(state_get f2b_jail)" ]]; then
@@ -98,12 +121,18 @@ main() {
   fi
 
   if ((REMOVE_XUI)); then
-    ( umask 077; mkdir -p -- "${MVN_BACKUP_DIR}" )
+    (
+      umask 077
+      mkdir -p -- "${MVN_BACKUP_DIR}"
+    )
     chmod 700 -- "${MVN_BACKUP_DIR}"
     local b
     b="${MVN_BACKUP_DIR}/x-ui-data-$(date +%Y%m%d-%H%M%S).tar.gz"
     if [[ -d /etc/x-ui ]]; then
-      ( umask 077; tar -czf "${b}" -C / etc/x-ui )
+      (
+        umask 077
+        tar -czf "${b}" -C / etc/x-ui
+      )
       log_ok "3x-ui data backed up to ${b} (root only)"
     fi
     echo "To remove 3x-ui itself run its own tool:  x-ui uninstall"

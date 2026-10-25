@@ -7,8 +7,8 @@
 # A firewall that cannot be set up (container, missing kernel modules, no package) degrades to a
 # loud warning: it must never abort a deployment or lock the administrator out.
 
-FW_ACTION="skip"            # skip | add | enable
-FW_BACKEND=""               # ufw | firewalld
+FW_ACTION="skip" # skip | add | enable
+FW_BACKEND=""    # ufw | firewalld
 FW_SSH_PORTS=()
 FW_TCP_EXTRA=()
 FW_UDP_EXTRA=()
@@ -34,9 +34,13 @@ fw_default_backend() {
 }
 
 fw_plan() {
-  FW_ACTION="skip"; FW_BACKEND=""
+  FW_ACTION="skip"
+  FW_BACKEND=""
   case "${MVN_FIREWALL}" in
-    skip) log_info "Firewall management disabled (MVN_FIREWALL=skip)"; return 0 ;;
+    skip)
+      log_info "Firewall management disabled (MVN_FIREWALL=skip)"
+      return 0
+      ;;
     auto) ;;
     *) die "${EXIT_PRECOND}" "MVN_FIREWALL must be auto or skip" ;;
   esac
@@ -50,7 +54,7 @@ fw_plan() {
   parse_port_list FW_UDP_EXTRA "${MVN_EXTRA_UDP_PORTS}" || die "${EXIT_PRECOND}" "Invalid MVN_EXTRA_UDP_PORTS"
   FW_USER_TCP=("${FW_TCP_EXTRA[@]}")
   if [[ "${XUI_SSL_EFFECTIVE}" == "ip" || "${XUI_SSL_EFFECTIVE}" == "domain" ]] && ! array_contains "80" "${FW_TCP_EXTRA[@]}"; then
-    FW_TCP_EXTRA+=("80")   # needed by the Let's Encrypt HTTP-01 challenge and its renewals
+    FW_TCP_EXTRA+=("80") # needed by the Let's Encrypt HTTP-01 challenge and its renewals
   fi
 
   local -a override=()
@@ -69,17 +73,32 @@ fw_plan() {
       elif is_noninteractive; then
         die "${EXIT_ABORT}" "Unattended mode cannot decide about a foreign firewall. Set MVN_FIREWALL=skip to continue without firewall changes."
       else
-        ask_yes_no "Continue WITHOUT any firewall changes (you must open ports yourself)?" n \
-          || die "${EXIT_ABORT}" "Aborted by user"
+        ask_yes_no "Continue WITHOUT any firewall changes (you must open ports yourself)?" n ||
+          die "${EXIT_ABORT}" "Aborted by user"
       fi
       FW_ACTION="skip"
       return 0
       ;;
-    ufw-active) FW_BACKEND="ufw"; FW_ACTION="add" ;;
-    firewalld-active) FW_BACKEND="firewalld"; FW_ACTION="add" ;;
-    ufw-inactive) FW_BACKEND="ufw"; FW_ACTION="enable" ;;
-    firewalld-inactive) FW_BACKEND="firewalld"; FW_ACTION="enable" ;;
-    *) FW_BACKEND="$(fw_default_backend)"; FW_ACTION="enable" ;;
+    ufw-active)
+      FW_BACKEND="ufw"
+      FW_ACTION="add"
+      ;;
+    firewalld-active)
+      FW_BACKEND="firewalld"
+      FW_ACTION="add"
+      ;;
+    ufw-inactive)
+      FW_BACKEND="ufw"
+      FW_ACTION="enable"
+      ;;
+    firewalld-inactive)
+      FW_BACKEND="firewalld"
+      FW_ACTION="enable"
+      ;;
+    *)
+      FW_BACKEND="$(fw_default_backend)"
+      FW_ACTION="enable"
+      ;;
   esac
 
   if [[ "${FW_ACTION}" == "enable" ]]; then
@@ -114,7 +133,11 @@ fw_plan_text() {
 }
 
 # fw_prepare: make sure the chosen firewall tool exists. Never fatal.
-fw_degrade() { log_warn "$1: the firewall will NOT be changed. Open the ports in your provider panel or set up a firewall yourself."; FW_ACTION="skip"; FW_FAILED=1; }
+fw_degrade() {
+  log_warn "$1: the firewall will NOT be changed. Open the ports in your provider panel or set up a firewall yourself."
+  FW_ACTION="skip"
+  FW_FAILED=1
+}
 
 fw_prepare() {
   [[ "${FW_ACTION}" == "enable" ]] || return 0
@@ -129,7 +152,7 @@ fw_prepare() {
 _ufw_rule_added() { ufw show added 2> /dev/null | has_match -E "^ufw allow ${1}( |$)"; }
 
 # ---------- firewalld primitives ----------
-_fwd_spec() { printf '%s' "${1/:/-}"; }   # ufw ranges use A:B, firewalld uses A-B
+_fwd_spec() { printf '%s' "${1/:/-}"; } # ufw ranges use A:B, firewalld uses A-B
 _fwd_running() { firewall-cmd --state 2> /dev/null | has_match -i '^running'; }
 
 _fwd_zone() { # the zone that really serves the public interface
@@ -161,7 +184,7 @@ _fwd_allow() { # spec(port or range) proto role
     run_logged firewall-cmd --zone="${zone}" --add-port="${spec}" || rc=1
   else
     run_logged firewall-offline-cmd --zone="${zone}" --add-port="${spec}" || rc=$?
-    [[ "${rc}" == "11" ]] && rc=0   # ALREADY_ENABLED
+    [[ "${rc}" == "11" ]] && rc=0 # ALREADY_ENABLED
   fi
   ((rc == 0)) || return 1
   state_add firewalld_rule "${zone} ${spec} $3"
@@ -236,7 +259,10 @@ _fw_turn_on() {
     firewalld)
       run_logged svc_enable_now firewalld || return 1
       local i
-      for ((i = 0; i < 15; i++)); do _fwd_running && return 0; sleep 1; done
+      for ((i = 0; i < 15; i++)); do
+        _fwd_running && return 0
+        sleep 1
+      done
       return 1
       ;;
   esac
@@ -268,7 +294,10 @@ fw_apply() {
       return 0
     fi
   fi
-  if [[ "${FW_BACKEND}" == "firewalld" ]]; then FW_ZONE="$(_fwd_zone)"; log_info "firewalld zone used for the rules: ${FW_ZONE}"; fi
+  if [[ "${FW_BACKEND}" == "firewalld" ]]; then
+    FW_ZONE="$(_fwd_zone)"
+    log_info "firewalld zone used for the rules: ${FW_ZONE}"
+  fi
 
   # 1) SSH first. If an SSH rule cannot be created, nothing is enabled.
   for p in "${FW_SSH_PORTS[@]}"; do

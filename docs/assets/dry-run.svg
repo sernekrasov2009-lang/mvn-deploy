@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="420" viewBox="0 0 1080 420" role="img" aria-label="MVN Deploy dry run">
+<rect width="1080" height="420" rx="10" fill="#0d1117"/>
+<circle cx="22" cy="18" r="6" fill="#f85149"/><circle cx="42" cy="18" r="6" fill="#d29922"/><circle cx="62" cy="18" r="6" fill="#3fb950"/>
+<g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="13.5" fill="#c9d1d9" xml:space="preserve">
+<text x="20" y="52">MVN Deploy — One-command VPN Server Deployment (v0.1.0-dev)</text>
+<text x="20" y="74" fill="#8b949e">$ sudo bash install.sh --dry-run -y --ssl selfsigned --panel-port 48217</text>
+<text x="20" y="96"></text>
+<text x="20" y="118" fill="#d2a8ff" font-weight="bold">== 1. Preflight ==</text>
+<text x="20" y="140"><tspan fill="#3fb950">[ OK ]</tspan> Preflight passed: Ubuntu 24.04.4 LTS, amd64</text>
+<text x="20" y="162"></text>
+<text x="20" y="184" fill="#d2a8ff" font-weight="bold">== 3. Plan ==</text>
+<text x="20" y="206"><tspan fill="#58a6ff">[INFO]</tspan> Planned changes:</text>
+<text x="20" y="228">  - System: Ubuntu 24.04.4 LTS (amd64); family debian, packages via apt, init systemd</text>
+<text x="20" y="250">  - Packages to install: iproute2; recommended: kmod ufw</text>
+<text x="20" y="272">  - 3x-ui: official installer (version: latest stable); panel port: 48217; HTTPS: self-signed certificate</text>
+<text x="20" y="294">  - Firewall: enable ufw (deny incoming); allow ssh 22 first, then the panel port, tcp: 443 udp: none</text>
+<text x="20" y="316">  - Fail2ban: install fail2ban; sshd jail on port(s) 22 (5 failures in 10m -&gt; ban 1h; your current SSH address is never banned)</text>
+<text x="20" y="338">  - BBR: enable bbr + fq via /etc/sysctl.d/99-mvn-deploy-bbr.conf</text>
+<text x="20" y="360">  - Not touched: sshd settings, provider (cloud) firewall, reboot, VPN clients/inbounds</text>
+<text x="20" y="382"><tspan fill="#3fb950">[ OK ]</tspan> Dry run finished: no changes were made.</text>
+</g></svg>

@@ -4,7 +4,7 @@
 # three_x_ui.sh — installs 3x-ui through ITS OFFICIAL installer. Nothing else here
 # installs Xray, writes an Xray config or creates a separate xray.service.
 
-XUI_ACTION="install"        # install | reinstall | keep
+XUI_ACTION="install" # install | reinstall | keep
 XUI_PANEL_PORT_VAL=""
 XUI_PANEL_URL=""
 XUI_CREDS_NOTE=""
@@ -14,8 +14,8 @@ xui_plan() {
   if [[ -n "${MVN_XUI_VERSION}" && ! "${MVN_XUI_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*$ ]]; then
     die "${EXIT_PRECOND}" "MVN_XUI_VERSION must look like v3.7.0 (or be empty for the latest stable release)"
   fi
-  [[ "${MVN_XUI_INSTALLER_REF}" =~ ^[A-Za-z0-9._-]+$ ]] \
-    || die "${EXIT_PRECOND}" "MVN_XUI_INSTALLER_REF contains invalid characters"
+  [[ "${MVN_XUI_INSTALLER_REF}" =~ ^[A-Za-z0-9._-]+$ ]] ||
+    die "${EXIT_PRECOND}" "MVN_XUI_INSTALLER_REF contains invalid characters"
   if [[ -n "${MVN_XUI_INSTALLER_SHA256}" && ! "${MVN_XUI_INSTALLER_SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
     die "${EXIT_PRECOND}" "MVN_XUI_INSTALLER_SHA256 must be 64 lowercase hex characters"
   fi
@@ -31,7 +31,7 @@ xui_plan() {
   fi
 
   if [[ "${XUI_ACTION}" == "keep" ]]; then
-    XUI_SSL_EFFECTIVE="existing"      # an existing panel is never reconfigured
+    XUI_SSL_EFFECTIVE="existing" # an existing panel is never reconfigured
     return 0
   fi
 
@@ -83,14 +83,14 @@ xui_run_installer() {
   local script="${WORK_DIR}/3x-ui-install.sh" out="${WORK_DIR}/3x-ui-install.out" rc=0 actual
 
   log_info "Downloading the official 3x-ui installer (ref: ${MVN_XUI_INSTALLER_REF})"
-  retry 3 5 curl -fsSL --connect-timeout 15 --max-time 120 -o "${script}" "${url}" \
-    || die "${EXIT_FAIL}" "Cannot download the 3x-ui installer from ${url}"
-  [[ -s "${script}" ]] && head -n 1 "${script}" | has_match '^#!' \
-    || die "${EXIT_FAIL}" "The downloaded 3x-ui installer is empty or not a script"
+  retry 3 5 curl -fsSL --connect-timeout 15 --max-time 120 -o "${script}" "${url}" ||
+    die "${EXIT_FAIL}" "Cannot download the 3x-ui installer from ${url}"
+  [[ -s "${script}" ]] && head -n 1 "${script}" | has_match '^#!' ||
+    die "${EXIT_FAIL}" "The downloaded 3x-ui installer is empty or not a script"
   if [[ -n "${MVN_XUI_INSTALLER_SHA256}" ]]; then
     actual="$(sha256sum "${script}" | awk '{print $1}')"
-    [[ "${actual}" == "${MVN_XUI_INSTALLER_SHA256}" ]] \
-      || die "${EXIT_FAIL}" "3x-ui installer checksum mismatch (expected ${MVN_XUI_INSTALLER_SHA256}, got ${actual}); not running it"
+    [[ "${actual}" == "${MVN_XUI_INSTALLER_SHA256}" ]] ||
+      die "${EXIT_FAIL}" "3x-ui installer checksum mismatch (expected ${MVN_XUI_INSTALLER_SHA256}, got ${actual}); not running it"
     log_ok "3x-ui installer checksum verified"
   else
     log_info "Installer checksum is not pinned (set MVN_XUI_INSTALLER_SHA256 to verify it)"
@@ -111,7 +111,10 @@ xui_run_installer() {
   log_info "Running the 3x-ui installer (unattended). This can take a few minutes..."
   # The installer prints generated credentials, so its output goes to a root-only temp
   # file and is NEVER copied into the shared log.
-  ( umask 022; env "${env_args[@]}" bash "${script}" "${args[@]}" < /dev/null > "${out}" 2>&1 ) || rc=$?
+  (
+    umask 022
+    env "${env_args[@]}" bash "${script}" "${args[@]}" < /dev/null > "${out}" 2>&1
+  ) || rc=$?
 
   if ((rc != 0)); then
     log_error "The 3x-ui installer failed (exit code ${rc}). Last lines (credentials redacted):"
@@ -138,7 +141,8 @@ xui_collect_info() {
   if ! valid_port "${port}" && [[ -x "${XUI_FOLDER}/x-ui" ]]; then
     port="$(_xui_setting_show | sed -n 's/^[[:space:]]*port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
     path="$(_xui_setting_show | sed -n 's/^[[:space:]]*webBasePath:[[:space:]]*\(.*\)$/\1/p' | head -n 1 | tr -d '[:space:]')"
-    path="${path#/}"; path="${path%/}"
+    path="${path#/}"
+    path="${path%/}"
   fi
   if [[ -z "${XUI_CREDS_NOTE}" ]]; then
     XUI_CREDS_NOTE="unchanged by MVN Deploy; show them with: x-ui settings  (or the x-ui menu to reset)"
@@ -158,7 +162,7 @@ xui_collect_info() {
   xui_probe_scheme "${XUI_PANEL_PORT_VAL}" "${path}" || log_warn "The panel did not answer on 127.0.0.1:${XUI_PANEL_PORT_VAL}"
 
   # Host for the address: the domain we configured, else the host of the installer's URL, else the public IP.
-  if [[ "${XUI_INSTALLED_BY_US}" == "1" && -n "${MVN_XUI_DOMAIN}" && ( "${XUI_SSL_EFFECTIVE}" == "domain" || "${XUI_SSL_EFFECTIVE}" == "selfsigned" ) ]]; then
+  if [[ "${XUI_INSTALLED_BY_US}" == "1" && -n "${MVN_XUI_DOMAIN}" && ("${XUI_SSL_EFFECTIVE}" == "domain" || "${XUI_SSL_EFFECTIVE}" == "selfsigned") ]]; then
     host="${MVN_XUI_DOMAIN}"
   elif [[ "${url}" =~ ^https?://([^/:[:space:]]+) && "${BASH_REMATCH[1]}" != *SERVER_IP_UNKNOWN* ]]; then
     host="${BASH_REMATCH[1]}"

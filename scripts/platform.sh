@@ -9,11 +9,13 @@
 # arch, manjaro, parch | opensuse-leap, opensuse-tumbleweed | alpine. Debian/Ubuntu derivatives
 # (ID_LIKE=debian) work because that installer falls back to apt for unknown IDs.
 
-PLAT_ID=""; PLAT_ID_LIKE=""; PLAT_VERSION=""
-PLAT_FAMILY=""      # debian | rhel | arch | suse | alpine
-PLAT_PM=""          # apt | dnf | yum | pacman | zypper | apk
-PLAT_INIT=""        # systemd | openrc | none
-PLAT_SUPPORT=""     # supported | derivative | old | unknown
+PLAT_ID=""
+PLAT_ID_LIKE=""
+PLAT_VERSION=""
+PLAT_FAMILY=""  # debian | rhel | arch | suse | alpine
+PLAT_PM=""      # apt | dnf | yum | pacman | zypper | apk
+PLAT_INIT=""    # systemd | openrc | none
+PLAT_SUPPORT="" # supported | derivative | old | unknown
 PLAT_NOTE=""
 
 # ---------- version helpers ----------
@@ -26,24 +28,63 @@ ver_ge() { # a b -> 0 when a >= b (version sort); an empty a means "rolling" and
 # plat_classify <id> <id_like> <version_id>: pure, sets PLAT_FAMILY / PLAT_SUPPORT / PLAT_NOTE.
 plat_classify() {
   local id="${1:-}" like="${2:-}" ver="${3:-}" min=""
-  PLAT_FAMILY=""; PLAT_SUPPORT="unknown"; PLAT_NOTE=""
+  PLAT_FAMILY=""
+  PLAT_SUPPORT="unknown"
+  PLAT_NOTE=""
   case "${id}" in
-    debian)                       PLAT_FAMILY="debian"; min="12" ;;
-    ubuntu)                       PLAT_FAMILY="debian"; min="20.04" ;;
-    armbian | raspbian)           PLAT_FAMILY="debian"; min="" ;;
-    rhel | almalinux | rocky | ol) PLAT_FAMILY="rhel"; min="8" ;;
-    centos)                       PLAT_FAMILY="rhel"; min="8" ;;
-    fedora)                       PLAT_FAMILY="rhel"; min="39" ;;
-    amzn)                         PLAT_FAMILY="rhel"; min="2023" ;;
-    virtuozzo)                    PLAT_FAMILY="rhel"; min="7" ;;
-    arch | manjaro | parch)       PLAT_FAMILY="arch"; min="" ;;
-    opensuse-leap)                PLAT_FAMILY="suse"; min="15.5" ;;
-    opensuse-tumbleweed)          PLAT_FAMILY="suse"; min="" ;;
-    alpine)                       PLAT_FAMILY="alpine"; min="3.18" ;;
+    debian)
+      PLAT_FAMILY="debian"
+      min="12"
+      ;;
+    ubuntu)
+      PLAT_FAMILY="debian"
+      min="20.04"
+      ;;
+    armbian | raspbian)
+      PLAT_FAMILY="debian"
+      min=""
+      ;;
+    rhel | almalinux | rocky | ol)
+      PLAT_FAMILY="rhel"
+      min="8"
+      ;;
+    centos)
+      PLAT_FAMILY="rhel"
+      min="8"
+      ;;
+    fedora)
+      PLAT_FAMILY="rhel"
+      min="39"
+      ;;
+    amzn)
+      PLAT_FAMILY="rhel"
+      min="2023"
+      ;;
+    virtuozzo)
+      PLAT_FAMILY="rhel"
+      min="7"
+      ;;
+    arch | manjaro | parch)
+      PLAT_FAMILY="arch"
+      min=""
+      ;;
+    opensuse-leap)
+      PLAT_FAMILY="suse"
+      min="15.5"
+      ;;
+    opensuse-tumbleweed)
+      PLAT_FAMILY="suse"
+      min=""
+      ;;
+    alpine)
+      PLAT_FAMILY="alpine"
+      min="3.18"
+      ;;
     *)
       # Unknown ID: only Debian/Ubuntu derivatives are safe, because the official installer uses apt for them.
       if [[ " ${like} " == *" debian "* || " ${like} " == *" ubuntu "* ]]; then
-        PLAT_FAMILY="debian"; PLAT_SUPPORT="derivative"
+        PLAT_FAMILY="debian"
+        PLAT_SUPPORT="derivative"
         PLAT_NOTE="${id:-this system} is a Debian/Ubuntu derivative; treated as Debian (best effort)"
         return 0
       fi
@@ -120,10 +161,14 @@ run_capture() {
 }
 
 # ---------- services (systemd / OpenRC) ----------
-_svc_name() { local n="${1%.service}"; printf '%s' "${n}"; }
+_svc_name() {
+  local n="${1%.service}"
+  printf '%s' "${n}"
+}
 
 svc_exists() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl cat "${n}.service" > /dev/null 2>&1 ;;
     openrc) [[ -x "/etc/init.d/${n}" ]] ;;
@@ -131,7 +176,8 @@ svc_exists() {
   esac
 }
 svc_active() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl is-active --quiet "${n}" 2> /dev/null ;;
     openrc) rc-service "${n}" status > /dev/null 2>&1 ;;
@@ -139,7 +185,8 @@ svc_active() {
   esac
 }
 svc_enabled() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl is-enabled --quiet "${n}" 2> /dev/null ;;
     openrc) rc-update show default 2> /dev/null | awk '{print $1}' | grep -qx "${n}" ;;
@@ -147,7 +194,8 @@ svc_enabled() {
   esac
 }
 svc_enable() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl enable "${n}" ;;
     openrc) rc-update add "${n}" default ;;
@@ -155,7 +203,8 @@ svc_enable() {
   esac
 }
 svc_start() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl start "${n}" ;;
     openrc) rc-service "${n}" start ;;
@@ -163,7 +212,8 @@ svc_start() {
   esac
 }
 svc_restart() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl restart "${n}" ;;
     openrc) rc-service "${n}" restart ;;
@@ -171,18 +221,23 @@ svc_restart() {
   esac
 }
 svc_stop() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd) systemctl stop "${n}" ;;
     openrc) rc-service "${n}" stop ;;
     *) return 1 ;;
   esac
 }
-svc_enable_now() { svc_enable "$1" || true; svc_start "$1"; }
+svc_enable_now() {
+  svc_enable "$1" || true
+  svc_start "$1"
+}
 
 # svc_dump <name>: status + recent journal into the log (for failures).
 svc_dump() {
-  local n; n="$(_svc_name "$1")"
+  local n
+  n="$(_svc_name "$1")"
   case "${PLAT_INIT}" in
     systemd)
       run_logged systemctl status "${n}" --no-pager -l || true
@@ -222,7 +277,7 @@ pkg_for_tool() {
         apk) echo "musl-utils" ;;
       esac
       ;;
-    *) echo "coreutils" ;;   # df install mktemp sha256sum stat timeout sort ...
+    *) echo "coreutils" ;; # df install mktemp sha256sum stat timeout sort ...
   esac
 }
 
@@ -243,7 +298,7 @@ _pkg_refresh_cmd() {
     yum) yum makecache -y -q ;;
     zypper) zypper --non-interactive --gpg-auto-import-keys refresh ;;
     apk) apk update ;;
-    pacman) true ;;   # pacman is refreshed on demand (partial upgrades are risky on Arch)
+    pacman) true ;; # pacman is refreshed on demand (partial upgrades are risky on Arch)
     *) return 1 ;;
   esac
 }

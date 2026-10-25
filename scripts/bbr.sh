@@ -3,7 +3,7 @@
 # shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # bbr.sh — enable TCP BBR (+ fq) only when the kernel supports it.
 
-BBR_RESULT="skipped"   # enabled | unchanged | unsupported | failed | skipped
+BBR_RESULT="skipped" # enabled | unchanged | unsupported | failed | skipped
 BBR_SYSCTL_FILE="/etc/sysctl.d/99-mvn-deploy-bbr.conf"
 BBR_MODULES_FILE="/etc/modules-load.d/mvn-deploy-bbr.conf"
 
@@ -15,12 +15,15 @@ _bbr_persisted_elsewhere() {
   for f in /etc/sysctl.d/*.conf; do
     [[ -e "${f}" && "${f}" != "${BBR_SYSCTL_FILE}" ]] && files+=("${f}")
   done
-  grep -Eqs '^[[:space:]]*net\.ipv4\.tcp_congestion_control[[:space:]]*=[[:space:]]*bbr' "${files[@]}" \
-    && grep -Eqs '^[[:space:]]*net\.core\.default_qdisc[[:space:]]*=[[:space:]]*fq' "${files[@]}"
+  grep -Eqs '^[[:space:]]*net\.ipv4\.tcp_congestion_control[[:space:]]*=[[:space:]]*bbr' "${files[@]}" &&
+    grep -Eqs '^[[:space:]]*net\.core\.default_qdisc[[:space:]]*=[[:space:]]*fq' "${files[@]}"
 }
 
 bbr_plan_text() {
-  if [[ "${MVN_BBR}" == "skip" ]]; then printf 'skipped (MVN_BBR=skip)'; return; fi
+  if [[ "${MVN_BBR}" == "skip" ]]; then
+    printf 'skipped (MVN_BBR=skip)'
+    return
+  fi
   if [[ "${BBR_CC_CURRENT}" == "bbr" && "${BBR_QDISC_CURRENT}" == "fq" ]]; then
     printf 'already active; persistence will be checked'
   elif grep -qw bbr <<< "${BBR_AVAILABLE}"; then
@@ -32,7 +35,9 @@ bbr_plan_text() {
 
 bbr_apply() {
   if [[ "${MVN_BBR}" == "skip" ]]; then
-    BBR_RESULT="skipped"; report_add "BBR" "SKIPPED" "MVN_BBR=skip"; return 0
+    BBR_RESULT="skipped"
+    report_add "BBR" "SKIPPED" "MVN_BBR=skip"
+    return 0
   fi
   [[ "${MVN_BBR}" == "auto" ]] || die "${EXIT_PRECOND}" "MVN_BBR must be auto or skip"
 
@@ -47,8 +52,8 @@ bbr_apply() {
   fi
 
   sys_detect_bbr
-  if [[ "${BBR_CC_CURRENT}" == "bbr" && "${BBR_QDISC_CURRENT}" == "fq" ]] \
-    && { [[ -f "${BBR_SYSCTL_FILE}" ]] || _bbr_persisted_elsewhere; }; then
+  if [[ "${BBR_CC_CURRENT}" == "bbr" && "${BBR_QDISC_CURRENT}" == "fq" ]] &&
+    { [[ -f "${BBR_SYSCTL_FILE}" ]] || _bbr_persisted_elsewhere; }; then
     BBR_RESULT="unchanged"
     log_ok "BBR is already enabled and persistent; no changes needed"
     report_add "BBR" "OK" "already enabled"

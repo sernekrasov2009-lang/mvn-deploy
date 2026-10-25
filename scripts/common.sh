@@ -3,14 +3,19 @@
 # common.sh — helpers shared by all modules: errors, prompts, state, ports, report.
 # shellcheck disable=SC2034  # globals here are used by the scripts that source this file
 
-EXIT_FAIL=1       # a stage failed
-EXIT_PRECOND=2    # unsupported/invalid environment, nothing was changed
-EXIT_ABORT=3      # a decision is needed (or the user declined)
+EXIT_FAIL=1    # a stage failed
+EXIT_PRECOND=2 # unsupported/invalid environment, nothing was changed
+EXIT_ABORT=3   # a decision is needed (or the user declined)
 
 WORK_DIR=""
 REPORT_ROWS=()
 
-die() { local code="$1"; shift; log_error "$*"; exit "${code}"; }
+die() {
+  local code="$1"
+  shift
+  log_error "$*"
+  exit "${code}"
+}
 
 cleanup_work_dir() {
   if [[ -n "${WORK_DIR}" && -d "${WORK_DIR}" ]]; then
@@ -23,7 +28,7 @@ is_noninteractive() { [[ "${MVN_NONINTERACTIVE:-0}" == "1" ]]; }
 
 detect_interactivity() {
   if [[ "${MVN_NONINTERACTIVE:-0}" != "1" ]]; then
-    if ! ( : < /dev/tty ) 2> /dev/null; then
+    if ! (: < /dev/tty) 2> /dev/null; then
       MVN_NONINTERACTIVE=1
     fi
   fi
@@ -33,7 +38,10 @@ detect_interactivity() {
 ask_yes_no() {
   local q="$1" def="${2:-n}" ans hint="[y/N]"
   [[ "${def}" == "y" ]] && hint="[Y/n]"
-  if is_noninteractive; then [[ "${def}" == "y" ]]; return; fi
+  if is_noninteractive; then
+    [[ "${def}" == "y" ]]
+    return
+  fi
   read -r -p "${q} ${hint} " ans < /dev/tty || ans=""
   ans="${ans:-${def}}"
   [[ "${ans}" =~ ^[Yy]([Ee][Ss])?$ ]]
@@ -42,7 +50,10 @@ ask_yes_no() {
 # ask_value "prompt" [default]  — prints the answer. Unattended: prints the default.
 ask_value() {
   local q="$1" def="${2:-}" ans
-  if is_noninteractive; then printf '%s' "${def}"; return 0; fi
+  if is_noninteractive; then
+    printf '%s' "${def}"
+    return 0
+  fi
   read -r -p "${q}${def:+ [${def}]}: " ans < /dev/tty || ans=""
   printf '%s' "${ans:-${def}}"
 }
@@ -86,8 +97,8 @@ safe_dir_ok() { # path
 }
 
 require_safe_dir() { # label path
-  safe_dir_ok "${2:-}" \
-    || die "${EXIT_PRECOND}" "$1 must be an absolute path (2+ levels) whose last part contains 'mvn-deploy'; got '${2:-}'"
+  safe_dir_ok "${2:-}" ||
+    die "${EXIT_PRECOND}" "$1 must be an absolute path (2+ levels) whose last part contains 'mvn-deploy'; got '${2:-}'"
 }
 
 # ---------- locking ----------
@@ -103,40 +114,52 @@ acquire_lock() {
 state_file() { printf '%s/state' "${MVN_STATE_DIR}"; }
 
 state_init() {
-  ( umask 077; mkdir -p -- "${MVN_STATE_DIR}"; [[ -f "${MVN_STATE_DIR}/state" ]] || : > "${MVN_STATE_DIR}/state" )
+  (
+    umask 077
+    mkdir -p -- "${MVN_STATE_DIR}"
+    [[ -f "${MVN_STATE_DIR}/state" ]] || : > "${MVN_STATE_DIR}/state"
+  )
   chmod 700 -- "${MVN_STATE_DIR}"
   chmod 600 -- "${MVN_STATE_DIR}/state"
 }
 
 state_get() { # key
-  local f; f="$(state_file)"
+  local f
+  f="$(state_file)"
   [[ -f "${f}" ]] || return 0
   sed -n "s/^${1}=//p" "${f}" | tail -n 1
 }
 
 state_list() { # key  -> all values
-  local f; f="$(state_file)"
+  local f
+  f="$(state_file)"
   [[ -f "${f}" ]] || return 0
   sed -n "s/^${1}=//p" "${f}"
 }
 
 state_set() { # key value (replaces)
-  local f tmp; f="$(state_file)"
+  local f tmp
+  f="$(state_file)"
   state_init
   tmp="$(mktemp "${MVN_STATE_DIR}/.state.XXXXXX")"
-  { grep -v "^${1}=" "${f}" || true; printf '%s=%s\n' "$1" "$2"; } > "${tmp}"
+  {
+    grep -v "^${1}=" "${f}" || true
+    printf '%s=%s\n' "$1" "$2"
+  } > "${tmp}"
   chmod 600 -- "${tmp}"
   mv -f -- "${tmp}" "${f}"
 }
 
 state_add() { # key value (appends if the exact pair is absent)
-  local f; f="$(state_file)"
+  local f
+  f="$(state_file)"
   state_init
   grep -qxF "${1}=${2}" "${f}" || printf '%s=%s\n' "$1" "$2" >> "${f}"
 }
 
 state_del() { # key value
-  local f tmp; f="$(state_file)"
+  local f tmp
+  f="$(state_file)"
   [[ -f "${f}" ]] || return 0
   tmp="$(mktemp "${MVN_STATE_DIR}/.state.XXXXXX")"
   { grep -vxF "${1}=${2}" "${f}" || true; } > "${tmp}"
@@ -151,7 +174,8 @@ valid_port_spec() { # N or A:B
   local s="${1:-}" a b
   [[ "${s}" =~ ^[0-9]+(:[0-9]+)?$ ]] || return 1
   if [[ "${s}" == *:* ]]; then
-    a="${s%%:*}"; b="${s##*:}"
+    a="${s%%:*}"
+    b="${s##*:}"
     valid_port "${a}" && valid_port "${b}" && ((10#${a} < 10#${b}))
   else
     valid_port "${s}"
@@ -166,7 +190,10 @@ parse_port_list() {
   _pl_out=()
   read -r -a toks <<< "${raw}"
   for tok in "${toks[@]}"; do
-    valid_port_spec "${tok}" || { log_error "Invalid port or port range: '${tok}'"; return 1; }
+    valid_port_spec "${tok}" || {
+      log_error "Invalid port or port range: '${tok}'"
+      return 1
+    }
     dup=0
     for x in "${_pl_out[@]}"; do [[ "${x}" == "${tok}" ]] && dup=1; done
     [[ "${dup}" -eq 1 ]] || _pl_out+=("${tok}")
@@ -175,7 +202,8 @@ parse_port_list() {
 }
 
 array_contains() { # needle elements...
-  local n="$1" e; shift
+  local n="$1" e
+  shift
   for e in "$@"; do [[ "${e}" == "${n}" ]] && return 0; done
   return 1
 }
@@ -186,7 +214,11 @@ kv_get() {
   local f="$1" k="$2" v
   [[ -r "${f}" ]] || return 1
   v="$(sed -n "s/^${k}=//p" "${f}" | head -n 1)"
-  v="${v#\'}"; v="${v%\'}"; v="${v#\"}"; v="${v%\"}"; v="${v//\\/}"
+  v="${v#\'}"
+  v="${v%\'}"
+  v="${v#\"}"
+  v="${v%\"}"
+  v="${v//\\/}"
   printf '%s' "${v}"
 }
 
@@ -196,28 +228,145 @@ redact_stream() {
 }
 
 # load_user_config: parse /etc/mvn-deploy/mvn-deploy.conf safely. Environment wins.
-load_user_config() {
-  local f="${MVN_CONFIG_FILE:-/etc/mvn-deploy/mvn-deploy.conf}" line key val owner mode
-  [[ -f "${f}" ]] || return 0
-  owner="$(stat -c '%u' "${f}")"; mode="$(stat -c '%a' "${f}")"
-  if [[ "${owner}" != "0" ]] || ((8#${mode} & 8#022)); then
-    die "${EXIT_PRECOND}" "Config ${f} must be owned by root and not group/world-writable"
-  fi
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    line="${line%%#*}"
+# _config_assign <VAR> <value>: environment and command-line flags win over the file.
+_config_assign() {
+  if [[ -z "${!1+x}" ]]; then printf -v "$1" '%s' "$2"; fi
+}
+
+_config_value_ok() { [[ "${1}" =~ ^[A-Za-z0-9._:/,@\ -]*$ ]]; }
+
+_yaml_var() { # config key -> MVN_ variable (whitelist; anything else is rejected)
+  case "$1" in
+    panel_port) echo "MVN_XUI_PANEL_PORT" ;;
+    ssl) echo "MVN_XUI_SSL_MODE" ;;
+    ssl_fallback) echo "MVN_XUI_SSL_FALLBACK" ;;
+    domain) echo "MVN_XUI_DOMAIN" ;;
+    acme_email) echo "MVN_XUI_ACME_EMAIL" ;;
+    xui_version) echo "MVN_XUI_VERSION" ;;
+    extra_tcp_ports | extra_udp_ports | ssh_ports | firewall | fail2ban | bbr | pkg_upgrade | allow_conflicts | allow_unsupported_os | allow_dns_mismatch | force_xui_reinstall | f2b_maxretry | f2b_findtime | f2b_bantime | f2b_ignore_ips | backup_keep)
+      printf 'MVN_%s' "${1^^}"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# yaml_parse <file>: a deliberately small YAML subset (flat "key: value", inline [a, b] and "- item"
+# lists, # comments, true/false). Prints MVN_NAME=value lines; nothing in the file is ever evaluated.
+yaml_parse() {
+  local f="$1" raw line key val var n=0 listkey="" item
+  local -a items=()
+  _yaml_flush() {
+    if [[ -n "${listkey}" ]]; then
+      local IFS=,
+      var="$(_yaml_var "${listkey}")"
+      printf '%s=%s\n' "${var}" "${items[*]:-}"
+      listkey=""
+      items=()
+    fi
+  }
+  while IFS= read -r raw || [[ -n "${raw}" ]]; do
+    n=$((n + 1))
+    line="${raw%%#*}"
     line="${line#"${line%%[![:space:]]*}"}"
     line="${line%"${line##*[![:space:]]}"}"
     [[ -z "${line}" ]] && continue
-    if [[ ! "${line}" =~ ^(MVN_[A-Z0-9_]+)=(.*)$ ]]; then
-      die "${EXIT_PRECOND}" "Invalid line in ${f}: only MVN_NAME=value is allowed"
+    if [[ "${line}" =~ ^-[[:space:]]+(.+)$ ]]; then
+      [[ -n "${listkey}" ]] || die "${EXIT_PRECOND}" "${f}:${n}: a list item needs a key above it"
+      item="${BASH_REMATCH[1]}"
+      item="${item#\"}"
+      item="${item%\"}"
+      item="${item#\'}"
+      item="${item%\'}"
+      _config_value_ok "${item}" || die "${EXIT_PRECOND}" "${f}:${n}: unsafe characters in list item"
+      items+=("${item}")
+      continue
     fi
-    key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
-    val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
-    if [[ ! "${val}" =~ ^[A-Za-z0-9._:/,@\ -]*$ ]]; then
-      die "${EXIT_PRECOND}" "Unsafe characters in value of ${key} in ${f}"
+    _yaml_flush
+    [[ "${line}" =~ ^([a-z0-9_]+):[[:space:]]*(.*)$ ]] || die "${EXIT_PRECOND}" "${f}:${n}: only simple 'key: value' lines are supported"
+    key="${BASH_REMATCH[1]}"
+    val="${BASH_REMATCH[2]}"
+    var="$(_yaml_var "${key}")" || die "${EXIT_PRECOND}" "${f}:${n}: unknown key '${key}'. See docs/CONFIG.md for the list of keys"
+    if [[ -z "${val}" ]]; then
+      listkey="${key}"
+      continue
     fi
-    if [[ -z "${!key+x}" ]]; then printf -v "${key}" '%s' "${val}"; fi
+    val="${val#\"}"
+    val="${val%\"}"
+    val="${val#\'}"
+    val="${val%\'}"
+    if [[ "${val}" =~ ^\[(.*)\]$ ]]; then
+      val="${BASH_REMATCH[1]}"
+      val="${val//\"/}"
+      val="${val//\'/}"
+      val="${val// /}"
+    fi
+    case "${key}:${val,,}" in
+      firewall:true | fail2ban:true | bbr:true) val="auto" ;;
+      firewall:false | fail2ban:false | bbr:false) val="skip" ;;
+      pkg_upgrade:true | pkg_upgrade:yes | allow_*:true | allow_*:yes | force_xui_reinstall:true | force_xui_reinstall:yes) val="1" ;;
+      pkg_upgrade:false | pkg_upgrade:no | allow_*:false | allow_*:no | force_xui_reinstall:false | force_xui_reinstall:no) val="0" ;;
+    esac
+    _config_value_ok "${val}" || die "${EXIT_PRECOND}" "${f}:${n}: unsafe characters in the value of '${key}'"
+    printf '%s=%s\n' "${var}" "${val}"
   done < "${f}"
+  _yaml_flush
+}
+
+# Config file: --config / MVN_CONFIG_FILE, else the first existing of mvn-deploy.yml, .yaml, .conf.
+_config_pick() {
+  local c
+  if [[ -n "${MVN_CONFIG_FILE:-}" ]]; then
+    printf '%s' "${MVN_CONFIG_FILE}"
+    return 0
+  fi
+  for c in /etc/mvn-deploy/mvn-deploy.yml /etc/mvn-deploy/mvn-deploy.yaml /etc/mvn-deploy/mvn-deploy.conf; do
+    if [[ -f "${c}" ]]; then
+      printf '%s' "${c}"
+      return 0
+    fi
+  done
+  return 0
+}
+
+load_user_config() {
+  local f line key val owner mode out
+  f="$(_config_pick)"
+  [[ -n "${f}" ]] || return 0
+  if [[ ! -f "${f}" ]]; then
+    die "${EXIT_PRECOND}" "Config file not found: ${f}"
+  fi
+  owner="$(stat -c '%u' "${f}")"
+  mode="$(stat -c '%a' "${f}")"
+  if [[ "${owner}" != "0" ]] || ((8#${mode} & 8#022)); then
+    die "${EXIT_PRECOND}" "Config ${f} must be owned by root and not group/world-writable (sudo chown root:root ${f}; sudo chmod 600 ${f})"
+  fi
+  case "${f}" in
+    *.yml | *.yaml)
+      out="$(yaml_parse "${f}")" || exit "${EXIT_PRECOND}"
+      while IFS='=' read -r key val; do
+        [[ -n "${key}" ]] && _config_assign "${key}" "${val}"
+      done <<< "${out}"
+      ;;
+    *)
+      while IFS= read -r line || [[ -n "${line}" ]]; do
+        line="${line%%#*}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "${line}" ]] && continue
+        if [[ ! "${line}" =~ ^(MVN_[A-Z0-9_]+)=(.*)$ ]]; then
+          die "${EXIT_PRECOND}" "Invalid line in ${f}: only MVN_NAME=value is allowed"
+        fi
+        key="${BASH_REMATCH[1]}"
+        val="${BASH_REMATCH[2]}"
+        val="${val#\"}"
+        val="${val%\"}"
+        val="${val#\'}"
+        val="${val%\'}"
+        _config_value_ok "${val}" || die "${EXIT_PRECOND}" "Unsafe characters in value of ${key} in ${f}"
+        _config_assign "${key}" "${val}"
+      done < "${f}"
+      ;;
+  esac
 }
 
 # ---------- final report ----------
@@ -239,4 +388,8 @@ report_print() {
 
 # has_match <grep-args...>: like `grep -q`, but reads ALL of stdin. Plain `grep -q` exits
 # early, which can SIGPIPE the producer and fail the pipeline under `set -o pipefail`.
-has_match() { local out; out="$(grep "$@" || true)"; [[ -n "${out}" ]]; }
+has_match() {
+  local out
+  out="$(grep "$@" || true)"
+  [[ -n "${out}" ]]
+}

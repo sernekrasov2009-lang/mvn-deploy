@@ -1,0 +1,21 @@
+# Example MVN Deploy configuration.
+# Copy to /etc/mvn-deploy/mvn-deploy.yml (owner root, mode 600) or pass it with:  --config deploy.yml
+# Command-line flags and environment variables always win over this file.
+# Every key is optional. Full list and meaning: docs/CONFIG.md
+
+panel_port: 54321            # 3x-ui panel port (omit for a random port)
+ssl: auto                    # auto | ip | domain | selfsigned | none
+domain: vpn.example.com      # with a domain: Let's Encrypt for the domain
+ssl_fallback: selfsigned     # if Let's Encrypt fails: selfsigned | none
+
+extra_tcp_ports: [443]       # ports for your inbounds, opened in the firewall
+extra_udp_ports: []
+ssh_ports: []                # extra SSH ports (the current one is detected automatically)
+
+firewall: true               # true = auto, false = leave the firewall alone
+fail2ban: true
+bbr: true
+
+f2b_maxretry: 5
+f2b_findtime: 10m
+f2b_bantime: 1h

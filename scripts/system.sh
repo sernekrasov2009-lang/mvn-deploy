@@ -3,13 +3,18 @@
 # shellcheck disable=SC2034  # globals are used by the scripts that source this file
 # system.sh — environment checks (read-only) and pre-change inventory.
 
-OS_ID=""; OS_VERSION_ID=""; OS_PRETTY=""; ARCH=""
+OS_ID=""
+OS_VERSION_ID=""
+OS_PRETTY=""
+ARCH=""
 SSH_PORTS_DETECTED=()
-FW_KIND="none"      # none | ufw-inactive | ufw-active | firewalld-inactive | firewalld-active | foreign
+FW_KIND="none" # none | ufw-inactive | ufw-active | firewalld-inactive | firewalld-active | foreign
 FW_DETAIL=""
 XUI_PRESENT=0
 CONFLICTS=()
-BBR_CC_CURRENT=""; BBR_QDISC_CURRENT=""; BBR_AVAILABLE=""
+BBR_CC_CURRENT=""
+BBR_QDISC_CURRENT=""
+BBR_AVAILABLE=""
 IS_RERUN=0
 
 sys_require_root() {
@@ -34,7 +39,8 @@ sys_detect_os() {
   PLAT_VERSION="$(. /etc/os-release && printf '%s' "${VERSION_ID:-}")"
   # shellcheck disable=SC1091
   OS_PRETTY="$(. /etc/os-release && printf '%s' "${PRETTY_NAME:-${ID:-unknown}}")"
-  OS_ID="${PLAT_ID}"; OS_VERSION_ID="${PLAT_VERSION}"
+  OS_ID="${PLAT_ID}"
+  OS_VERSION_ID="${PLAT_VERSION}"
 
   plat_classify "${PLAT_ID}" "${PLAT_ID_LIKE}" "${PLAT_VERSION}"
   case "${PLAT_SUPPORT}" in
@@ -141,16 +147,16 @@ sys_check_network() {
   fi
   local host rc
   for host in github.com raw.githubusercontent.com; do
-    _resolve_ok "${host}" \
-      || die "${EXIT_PRECOND}" "DNS resolution failed for ${host}. Check /etc/resolv.conf (test: getent hosts ${host}) and that the server has internet access."
-    retry 3 3 _tcp_probe "${host}" 443 \
-      || die "${EXIT_PRECOND}" "Cannot connect to ${host}:443. Typical causes: outbound filtering by the provider/firewall, an IPv6-only network (GitHub has no IPv6: use NAT64/DNS64 or an IPv4 address), or a required proxy (export HTTPS_PROXY and run sudo -E)."
+    _resolve_ok "${host}" ||
+      die "${EXIT_PRECOND}" "DNS resolution failed for ${host}. Check /etc/resolv.conf (test: getent hosts ${host}) and that the server has internet access."
+    retry 3 3 _tcp_probe "${host}" 443 ||
+      die "${EXIT_PRECOND}" "Cannot connect to ${host}:443. Typical causes: outbound filtering by the provider/firewall, an IPv6-only network (GitHub has no IPv6: use NAT64/DNS64 or an IPv4 address), or a required proxy (export HTTPS_PROXY and run sudo -E)."
   done
   if command -v curl > /dev/null 2>&1; then
     rc=0
     curl -fsS --max-time 20 -o /dev/null https://raw.githubusercontent.com > /dev/null 2>&1 || rc=$?
     case "${rc}" in
-      0 | 22) ;;   # 22 = HTTP error status, TLS itself worked
+      0 | 22) ;; # 22 = HTTP error status, TLS itself worked
       60 | 35 | 51 | 58 | 77) die "${EXIT_PRECOND}" "TLS to GitHub failed (curl exit ${rc}). Check the system clock (date) and install/update ca-certificates." ;;
       *) log_warn "HTTPS test to GitHub returned curl exit ${rc}; downloads may fail" ;;
     esac
@@ -178,8 +184,8 @@ sys_check_resources() {
     log_warn "Running inside a container (${VIRT_KIND}): BBR and the firewall may be restricted by the host; failures there are reported as warnings"
   fi
   IS_DESKTOP=0
-  if [[ "${PLAT_INIT}" == "systemd" ]] && command -v systemctl > /dev/null 2>&1 \
-    && [[ "$(systemctl get-default 2> /dev/null || true)" == "graphical.target" ]]; then
+  if [[ "${PLAT_INIT}" == "systemd" ]] && command -v systemctl > /dev/null 2>&1 &&
+    [[ "$(systemctl get-default 2> /dev/null || true)" == "graphical.target" ]]; then
     IS_DESKTOP=1
     log_warn "This machine boots into a graphical desktop. MVN Deploy is built for servers: a real run would install a public VPN panel and change firewall/sysctl settings here."
   fi
@@ -195,7 +201,8 @@ _session_ssh_conn() { # prints "client_ip client_port server_ip server_port" of 
     fi
     ppid="$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/${pid}/status" 2> /dev/null || true)"
     [[ -n "${ppid}" && "${ppid}" != "${pid}" ]] || break
-    pid="${ppid}"; guard=$((guard + 1))
+    pid="${ppid}"
+    guard=$((guard + 1))
   done
   if [[ -n "${conn}" ]]; then printf '%s\n' "${conn}"; fi
   return 0
@@ -260,32 +267,48 @@ _iptables_restrictive() {
 }
 
 sys_detect_firewall() {
-  FW_KIND="none"; FW_DETAIL=""
+  FW_KIND="none"
+  FW_DETAIL=""
   local inactive="" inactive_detail=""
   if command -v ufw > /dev/null 2>&1; then
     if ufw status 2> /dev/null | has_match -i '^Status: active'; then
-      FW_KIND="ufw-active"; FW_DETAIL="UFW is active"; return 0
+      FW_KIND="ufw-active"
+      FW_DETAIL="UFW is active"
+      return 0
     fi
-    inactive="ufw-inactive"; inactive_detail="UFW is installed but inactive"
+    inactive="ufw-inactive"
+    inactive_detail="UFW is installed but inactive"
   fi
   if command -v firewall-cmd > /dev/null 2>&1; then
     if svc_active firewalld && firewall-cmd --state 2> /dev/null | has_match -i 'running'; then
-      FW_KIND="firewalld-active"; FW_DETAIL="firewalld is active"; return 0
+      FW_KIND="firewalld-active"
+      FW_DETAIL="firewalld is active"
+      return 0
     fi
     # Both installed but idle: prefer the tool that is native to the distribution family.
     if [[ -z "${inactive}" || "${PLAT_FAMILY}" == "rhel" || "${PLAT_FAMILY}" == "suse" ]]; then
-      inactive="firewalld-inactive"; inactive_detail="firewalld is installed but inactive"
+      inactive="firewalld-inactive"
+      inactive_detail="firewalld is installed but inactive"
     fi
   elif svc_active firewalld; then
-    FW_KIND="foreign"; FW_DETAIL="firewalld service is running but firewall-cmd is missing"; return 0
+    FW_KIND="foreign"
+    FW_DETAIL="firewalld service is running but firewall-cmd is missing"
+    return 0
   fi
   if command -v nft > /dev/null 2>&1 && nft list ruleset 2> /dev/null | has_match -E 'policy (drop|reject)|[[:space:]](drop|reject)([[:space:]]|$)'; then
-    FW_KIND="foreign"; FW_DETAIL="nftables has restrictive rules"; return 0
+    FW_KIND="foreign"
+    FW_DETAIL="nftables has restrictive rules"
+    return 0
   fi
   if _iptables_restrictive; then
-    FW_KIND="foreign"; FW_DETAIL="iptables has custom rules or a non-ACCEPT policy"; return 0
+    FW_KIND="foreign"
+    FW_DETAIL="iptables has custom rules or a non-ACCEPT policy"
+    return 0
   fi
-  if [[ -n "${inactive}" ]]; then FW_KIND="${inactive}"; FW_DETAIL="${inactive_detail}"; fi
+  if [[ -n "${inactive}" ]]; then
+    FW_KIND="${inactive}"
+    FW_DETAIL="${inactive_detail}"
+  fi
   return 0
 }
 
@@ -321,7 +344,10 @@ sys_detect_rerun() {
 sys_snapshot() {
   state_init
   local dir="${MVN_STATE_DIR}/snapshots" f
-  ( umask 077; mkdir -p -- "${dir}" )
+  (
+    umask 077
+    mkdir -p -- "${dir}"
+  )
   f="${dir}/snapshot-$(date +%Y%m%d-%H%M%S).txt"
   (
     umask 077
