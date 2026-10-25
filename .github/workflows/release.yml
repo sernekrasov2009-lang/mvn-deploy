@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish ${{ github.ref_name }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag must contain a pinned install.sh
+        run: |
+          grep -q "^MVN_PINNED_REF=\"${GITHUB_REF_NAME}\"" install.sh \
+            || { echo "install.sh in this tag is not pinned to ${GITHUB_REF_NAME}"; exit 1; }
+          grep -q "^MVN_VERSION=\"${GITHUB_REF_NAME#v}\"" config/defaults.conf \
+            || { echo "config/defaults.conf has a different version"; exit 1; }
+      - name: Lint and unit tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt && bash tests/lint.sh
+      - name: Build the archive and checksum
+        run: bash tools/make-release.sh "${GITHUB_REF_NAME}"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "${GITHUB_REF_NAME}" in v0.*) pre="--prerelease" ;; esac
+          gh release create "${GITHUB_REF_NAME}" dist/* ${pre} --title "MVN Deploy ${GITHUB_REF_NAME}" --generate-notes \
+            --notes "Install with a verified checksum: see the README. Changes: CHANGELOG.md."
+      - name: Verify the published release (download + SHA-256)
+        run: |
+          sleep 5
+          bash install.sh --fetch-only /tmp/verify --ref "${GITHUB_REF_NAME}"
+          test -f /tmp/verify/install.sh && test -f /tmp/verify/bin/mvn-deploy
+          echo "release ${GITHUB_REF_NAME} downloads and verifies correctly"
