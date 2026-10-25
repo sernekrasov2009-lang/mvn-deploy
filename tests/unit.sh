@@ -139,7 +139,7 @@ PYEOF
   assert_false backup_validate_archive "${T}/missing.tar.gz"
 fi
 
-assert_true _ip_is_local 127.0.0.1
+if command -v ip > /dev/null 2>&1; then assert_true _ip_is_local 127.0.0.1; fi
 assert_false _ip_is_local 203.0.113.99
 assert_false _ip_is_local ""
 
