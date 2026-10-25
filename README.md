@@ -71,8 +71,17 @@ sudo MVN_ALLOW_DEV=1 MVN_EXTRA_TCP_PORTS=443 bash /tmp/mvn-deploy-install.sh -y 
 
 Сначала можно добавить `--dry-run`: скрипт покажет план и ничего не изменит.
 
-> Пока нет подписанного релиза, установка идёт из ветки `main` (поэтому `MVN_ALLOW_DEV=1`).
-> Релизы с проверкой SHA-256 появятся после первых успешных установок на реальных серверах.
+**Релиз с проверкой SHA-256** (рекомендуется; `MVN_ALLOW_DEV` не нужен). Установщик из релиза скачивает архив того же релиза и сверяет контрольную сумму; при несовпадении останавливается и ничего не запускает:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sernekrasov2009-lang/mvn-deploy/v0.1.0/install.sh -o /tmp/mvn-deploy-install.sh
+sudo bash /tmp/mvn-deploy-install.sh
+```
+
+Чтобы закрепить сумму самостоятельно, сверьте её с файлом `mvn-deploy-v0.1.0.tar.gz.sha256` на странице релиза и передайте `MVN_SHA256=СУММА`.
+Текущий релиз: [v0.1.0](https://github.com/sernekrasov2009-lang/mvn-deploy/releases/tag/v0.1.0) (предварительный).
+
+> Установка из ветки `main` идёт без проверки контрольной суммы (поэтому `MVN_ALLOW_DEV=1`).
 > **Alpine:** сначала `apk add bash curl`, у Alpine нет bash по умолчанию.
 
 После установки в конце выводится адрес панели; логин и пароль лежат в `/etc/x-ui/install-result.env` (только root).
