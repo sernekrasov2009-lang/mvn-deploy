@@ -17,7 +17,7 @@ umask 022
 
 MVN_REPO="sernekrasov2009-lang/mvn-deploy"
 # Release tags set this to their own tag (vX.Y.Z); during development it is "main".
-MVN_PINNED_REF="main"
+MVN_PINNED_REF="v0.1.0"
 
 # ============================================================================
 # Bootstrap layer — self-contained: must work when install.sh is a single file.
