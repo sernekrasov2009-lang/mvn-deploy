@@ -139,6 +139,10 @@ PYEOF
   assert_false backup_validate_archive "${T}/missing.tar.gz"
 fi
 
+assert_true _ip_is_local 127.0.0.1
+assert_false _ip_is_local 203.0.113.99
+assert_false _ip_is_local ""
+
 # inode check must not fire on Btrfs (reports 0 total inodes)
 assert_false inodes_low 0 0
 assert_false inodes_low "" ""

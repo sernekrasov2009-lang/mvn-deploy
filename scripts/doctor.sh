@@ -75,6 +75,10 @@ _doctor_network() {
     if [[ -n "${ip}" ]]; then
       _d_info "Public IPv4: ${ip}"
       _is_private_ipv4 "${ip}" && _d_warn "The public address ${ip} is private/NAT: Let's Encrypt for the IP cannot work"
+      if ! _ip_is_local "${ip}"; then
+        _d_info "The public address is not on this machine's network card: it is behind NAT (home router or a cloud with 1:1 NAT)."
+        _d_info "Local address: $(_local_src_ipv4). From the internet the ports must be forwarded or opened at the provider."
+      fi
     else
       _d_warn "Could not detect the public IPv4 address"
     fi

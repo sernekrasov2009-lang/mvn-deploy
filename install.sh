@@ -379,18 +379,28 @@ stage_report() {
     printf '%sDeployment completed.%s\n' "${C_GREEN}" "${C_RESET}"
   fi
   printf '  Panel address : %s\n' "${XUI_PANEL_URL:-unknown (run: x-ui settings)}"
+  if [[ -n "${XUI_LAN_URL}" ]]; then printf '  Local address : %s   (from inside the same network)\n' "${XUI_LAN_URL}"; fi
   printf '  Credentials   : %s\n' "${XUI_CREDS_NOTE}"
   printf '  Log file      : %s\n' "${LOG_FILE}"
   printf '  MVN Deploy    : %s (%s)\n' "${MVN_VERSION}" "${MVN_INSTALL_DIR}"
   echo
   echo "Next steps:"
   echo "  1. Check the firewall of your VPS provider (cloud panel): open the panel port and your VPN ports."
+  if [[ "${XUI_NAT}" == "1" ]]; then
+    echo "     This machine is behind NAT (its public address is not on its own network card: a home router, or a cloud with 1:1 NAT)."
+    echo "     Inside the same network use the Local address above. From the internet the panel port must be forwarded on the router (or opened at the provider)."
+  fi
   if [[ "${XUI_SCHEME}" == "http" ]]; then
-    echo "  2. The panel runs over plain HTTP: log in through an SSH tunnel (ssh -L 8443:127.0.0.1:${XUI_PANEL_PORT_VAL:-<panel-port>} user@server), or enable HTTPS from the x-ui menu (run: x-ui, then SSL Certificate Management)."
+    echo "  2. The panel runs over plain HTTP: log in through an SSH tunnel (ssh -L 8443:127.0.0.1:${XUI_PANEL_PORT_VAL:-PANEL-PORT} user@SERVER), or enable HTTPS from the x-ui menu (run: x-ui, then SSL Certificate Management)."
   elif [[ "${XUI_SSL_EFFECTIVE}" == "selfsigned" ]]; then
     echo "  2. The panel uses a self-signed certificate: the browser shows a warning once; accept it. A domain + Let's Encrypt removes the warning."
   fi
-  echo "  3. Create inbounds/clients in the 3x-ui panel. For every new inbound port run, e.g.: ufw allow <port>/tcp"
+  if [[ "${FW_BACKEND}" == "firewalld" ]]; then
+    echo "  3. Create inbounds/clients in the 3x-ui panel. For every new inbound port run, e.g.: firewall-cmd --permanent --add-port=PORT/tcp && firewall-cmd --reload"
+  else
+    echo "  3. Create inbounds/clients in the 3x-ui panel. For every new inbound port run, e.g.: ufw allow PORT/tcp"
+  fi
+  echo "  4. Check the server any time with:  mvn-deploy doctor   (backups: mvn-deploy backup)"
   if ((${#MVN_WARNINGS[@]})); then
     echo
     echo "Warnings:"

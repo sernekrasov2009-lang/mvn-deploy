@@ -7,6 +7,8 @@
 XUI_ACTION="install" # install | reinstall | keep
 XUI_PANEL_PORT_VAL=""
 XUI_PANEL_URL=""
+XUI_LAN_URL="" # address inside the local network when the public address is behind NAT
+XUI_NAT=0
 XUI_CREDS_NOTE=""
 XUI_INSTALLED_BY_US=0
 
@@ -170,7 +172,17 @@ xui_collect_info() {
   if [[ -z "${host}" ]]; then host="${XUI_PUBLIC_IP}"; fi
   if [[ -z "${host}" ]]; then host="$(_local_src_ipv4)"; fi
   rest="${XUI_PANEL_PORT_VAL}/${path}"
-  XUI_PANEL_URL="${XUI_SCHEME:-http}://${host:-<server-ip>}:${rest}"
+  XUI_PANEL_URL="${XUI_SCHEME:-http}://${host:-SERVER-IP}:${rest}"
+
+  # A public address that is not on any of our interfaces means NAT (home router, or a cloud with 1:1 NAT).
+  XUI_LAN_URL=""
+  XUI_NAT=0
+  local lan
+  lan="$(_local_src_ipv4)"
+  if [[ -n "${lan}" && "${host}" != "${lan}" ]] && _valid_ipv4 "${host}" && ! _ip_is_local "${host}"; then
+    XUI_NAT=1
+    XUI_LAN_URL="${XUI_SCHEME:-http}://${lan}:${rest}"
+  fi
 }
 
 xui_apply() {

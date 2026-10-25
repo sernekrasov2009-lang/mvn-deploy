@@ -255,7 +255,10 @@ _fw_enable_backend() {
 
 _fw_turn_on() {
   case "${FW_BACKEND}" in
-    ufw) run_logged ufw --force enable ;;
+    ufw)
+      run_logged ufw --force enable || return 1
+      run_logged svc_enable ufw || true # Arch/Alpine: the package does not enable its unit
+      ;;
     firewalld)
       run_logged svc_enable_now firewalld || return 1
       local i

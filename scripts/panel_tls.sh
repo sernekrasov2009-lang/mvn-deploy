@@ -27,6 +27,9 @@ _is_private_ipv4() {
   ((a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127)))
 }
 
+# _ip_is_local <ipv4>: is this address configured on one of our own interfaces?
+_ip_is_local() { ip -4 -o addr show 2> /dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qxF -- "${1:-}"; }
+
 _public_ipv4() {
   local u r
   for u in https://api4.ipify.org https://ipv4.icanhazip.com https://4.ident.me; do
